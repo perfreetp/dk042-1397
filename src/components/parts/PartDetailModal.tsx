@@ -7,6 +7,7 @@ import { findRemovalById, findDocsByNumbers, findNotesByPartId } from "@/store/s
 import { riskBgClass, riskColor } from "@/utils/riskUtils";
 import { cyclePercentage } from "@/utils/dateUtils";
 import { formatDateTime } from "@/utils/dateUtils";
+import LifeTrendPanel from "./LifeTrendPanel";
 
 export default function PartDetailModal({ part, onClose }: { part: LifePart; onClose: () => void }) {
   const removalRecords = useAppStore((s) => s.removalRecords);
@@ -137,6 +138,11 @@ export default function PartDetailModal({ part, onClose }: { part: LifePart; onC
                 </span>
               </div>
             </div>
+          </div>
+
+          {/* 寿命趋势看板 */}
+          <div className="mb-7">
+            <LifeTrendPanel part={part} />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
