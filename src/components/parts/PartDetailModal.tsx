@@ -8,6 +8,7 @@ import { riskBgClass, riskColor } from "@/utils/riskUtils";
 import { cyclePercentage } from "@/utils/dateUtils";
 import { formatDateTime } from "@/utils/dateUtils";
 import LifeTrendPanel from "./LifeTrendPanel";
+import TaskStepsPanel from "./TaskStepsPanel";
 
 export default function PartDetailModal({ part, onClose }: { part: LifePart; onClose: () => void }) {
   const removalRecords = useAppStore((s) => s.removalRecords);
@@ -143,6 +144,11 @@ export default function PartDetailModal({ part, onClose }: { part: LifePart; onC
           {/* 寿命趋势看板 */}
           <div className="mb-7">
             <LifeTrendPanel part={part} />
+          </div>
+
+          {/* 处理动作进度 */}
+          <div className="mb-7">
+            <TaskStepsPanel part={part} />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">

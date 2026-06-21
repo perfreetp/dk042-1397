@@ -3,8 +3,10 @@ import WarningWindowSelector from "@/components/schedule/WarningWindowSelector";
 import ScheduleWindow from "@/components/schedule/ScheduleWindow";
 import RiskCard from "@/components/schedule/RiskCard";
 import WeeklyPlanView from "@/components/schedule/WeeklyPlanView";
+import ConflictBanner from "@/components/schedule/ConflictBanner";
 import { useAppStore } from "@/store/useAppStore";
-import { computeWarningParts, computeUnscheduledWarningParts } from "@/store/selectors";
+import { computeWarningParts, computeUnscheduledWarningParts, computeScheduledParts } from "@/store/selectors";
+import { detectConflicts } from "@/utils/conflictUtils";
 import { CalendarClock, AlertTriangle, LayoutGrid, CalendarRange } from "lucide-react";
 
 type ViewMode = "CARD" | "WEEKLY";
@@ -14,7 +16,14 @@ export default function SchedulePage() {
   const warningWindow = useAppStore((s) => s.warningWindow);
   const customCycles = useAppStore((s) => s.customCycles);
   const scheduledPartIds = useAppStore((s) => s.scheduledPartIds);
+  const openDrawerForPart = useAppStore((s) => s.openDrawerForPart);
   const [viewMode, setViewMode] = useState<ViewMode>("CARD");
+
+  const scheduledParts = useMemo(
+    () => computeScheduledParts(parts, scheduledPartIds),
+    [parts, scheduledPartIds]
+  );
+  const conflicts = useMemo(() => detectConflicts(scheduledParts), [scheduledParts]);
 
   const warningParts = useMemo(
     () => computeUnscheduledWarningParts(parts, warningWindow, customCycles, scheduledPartIds),
@@ -75,6 +84,11 @@ export default function SchedulePage() {
             </button>
           </div>
         </div>
+
+        <ConflictBanner
+          conflicts={conflicts}
+          onJumpToPart={(partId) => openDrawerForPart(partId)}
+        />
 
         <WarningWindowSelector />
 

@@ -1,9 +1,10 @@
 import { useState, useMemo } from "react";
 import { useAppStore } from "@/store/useAppStore";
-import { findNotesByPartId } from "@/store/selectors";
+import { findNotesByPartId, computeScheduledParts } from "@/store/selectors";
 import type { LifePart } from "@/types";
 import { CATEGORY_LABEL, RISK_LABEL, SCHEDULE_LABEL } from "@/types";
 import { riskColor } from "@/utils/riskUtils";
+import { detectConflicts, getConflictsForPart, getMaxSeverity } from "@/utils/conflictUtils";
 import {
   GripVertical,
   Plane,
@@ -13,6 +14,7 @@ import {
   MapPin,
   Info,
   X,
+  AlertTriangle,
 } from "lucide-react";
 import StatusMarker from "./StatusMarker";
 import SchedulePlanner from "./SchedulePlanner";
@@ -30,10 +32,23 @@ export default function RiskCard({
 }) {
   const openDrawerForPart = useAppStore((s) => s.openDrawerForPart);
   const handoverNotes = useAppStore((s) => s.handoverNotes);
+  const parts = useAppStore((s) => s.parts);
+  const scheduledPartIds = useAppStore((s) => s.scheduledPartIds);
   const notesCount = useMemo(
     () => findNotesByPartId(handoverNotes, part.id).length,
     [handoverNotes, part.id]
   );
+  const scheduledParts = useMemo(
+    () => computeScheduledParts(parts, scheduledPartIds),
+    [parts, scheduledPartIds]
+  );
+  const allConflicts = useMemo(() => detectConflicts(scheduledParts), [scheduledParts]);
+  const partConflicts = useMemo(
+    () => getConflictsForPart(allConflicts, part.id),
+    [allConflicts, part.id]
+  );
+  const partMaxSeverity = useMemo(() => getMaxSeverity(partConflicts), [partConflicts]);
+  const hasConflicts = partConflicts.length > 0;
   const [dragging, setDragging] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
@@ -62,6 +77,16 @@ export default function RiskCard({
       ].join(" ")}
       style={{ borderColor: `${riskColor(part.riskLevel)}45` }}
     >
+      {hasConflicts && !expanded && (
+        <span
+          className={[
+            "absolute top-2 right-2 w-2.5 h-2.5 rounded-full z-10",
+            partMaxSeverity === "CRITICAL"
+              ? "bg-alert-critical animate-ping-fast"
+              : "bg-alert-warning animate-ping-slow",
+          ].join(" ")}
+        />
+      )}
       {/* Risk left bar */}
       <div
         className={[
@@ -83,6 +108,19 @@ export default function RiskCard({
           )}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap mb-1">
+              {hasConflicts && (
+                <span
+                  className={[
+                    "inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[10px] font-bold",
+                    partMaxSeverity === "CRITICAL"
+                      ? "bg-alert-critical/15 text-alert-critical border border-alert-critical/30"
+                      : "bg-alert-warning/15 text-alert-warning border border-alert-warning/30",
+                  ].join(" ")}
+                >
+                  <AlertTriangle className="w-2.5 h-2.5" />
+                  冲突
+                </span>
+              )}
               <span
                 className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider"
                 style={{
@@ -219,6 +257,27 @@ export default function RiskCard({
                 <div className="rounded-md border border-gray-200 p-2 text-[11px]">
                   <span className="text-gray-500">当前标记：</span>
                   <b className="text-aviation-700">{SCHEDULE_LABEL[part.scheduleStatus]}</b>
+                </div>
+              )}
+              {hasConflicts && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1 text-[10px] font-bold text-alert-critical uppercase tracking-wider">
+                    <AlertTriangle className="w-3 h-3" />
+                    排程冲突警告
+                  </div>
+                  {partConflicts.map((c) => (
+                    <div
+                      key={c.id}
+                      className={[
+                        "text-[11px] leading-relaxed rounded-md px-2.5 py-2 border",
+                        c.severity === "CRITICAL"
+                          ? "bg-alert-critical/10 border-alert-critical/30 text-alert-critical"
+                          : "bg-alert-warning/10 border-alert-warning/30 text-alert-warning",
+                      ].join(" ")}
+                    >
+                      ⚠️ {c.description}
+                    </div>
+                  ))}
                 </div>
               )}
               <StatusMarker partId={part.id} />

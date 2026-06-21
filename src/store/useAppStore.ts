@@ -7,8 +7,10 @@ import type {
   ScheduleStatus,
   WarningWindow,
   AuthorRole,
+  TaskStep,
+  TaskStatus,
 } from "@/types";
-import { mockParts, mockRemovals, mockDocs, mockNotes } from "@/data/mockData";
+import { mockParts, mockRemovals, mockDocs, mockNotes, mockTaskSteps } from "@/data/mockData";
 import type { RemovalRecord, AirworthinessDoc } from "@/types";
 
 const STORAGE_KEY = "life-part-tracker:v1";
@@ -20,6 +22,7 @@ interface PersistedState {
   filters: Filters;
   warningWindow: WarningWindow;
   customCycles: number;
+  taskSteps: TaskStep[];
 }
 
 function loadPersisted(): Partial<PersistedState> {
@@ -43,6 +46,7 @@ function persistState(s: AppState) {
       filters: s.filters,
       warningWindow: s.warningWindow,
       customCycles: s.customCycles,
+      taskSteps: s.taskSteps,
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
   } catch {
@@ -58,6 +62,7 @@ interface AppState {
   airworthinessDocs: AirworthinessDoc[];
   handoverNotes: HandoverNote[];
   scheduledPartIds: string[];
+  taskSteps: TaskStep[];
   drawerOpen: boolean;
   activePartId: string | null;
 
@@ -73,6 +78,11 @@ interface AppState {
   unschedulePart: (partId: string) => void;
   setScheduleStatus: (partId: string, status: ScheduleStatus) => void;
   updateScheduleDetails: (partId: string, details: Partial<Pick<LifePart, "plannedDate" | "plannedBay" | "plannedBase">>) => void;
+
+  addTaskStep: (step: Omit<TaskStep, "id">) => void;
+  updateTaskStep: (id: string, patch: Partial<TaskStep>) => void;
+  deleteTaskStep: (id: string) => void;
+  toggleTaskStepStatus: (id: string, newStatus: TaskStatus) => void;
 
   openDrawerForPart: (partId: string) => void;
   closeDrawer: () => void;
@@ -105,6 +115,7 @@ export const useAppStore = create<AppState>((set) => {
     airworthinessDocs: [...mockDocs],
     handoverNotes: persisted.handoverNotes ?? [...mockNotes],
     scheduledPartIds: persisted.scheduledPartIds ?? mockParts.filter((p) => p.isScheduled).map((p) => p.id),
+    taskSteps: persisted.taskSteps ?? [...mockTaskSteps],
     drawerOpen: false,
     activePartId: null,
 
@@ -162,6 +173,40 @@ export const useAppStore = create<AppState>((set) => {
     updateScheduleDetails: (partId, details) =>
       set((s) => ({
         parts: s.parts.map((p) => (p.id === partId ? { ...p, ...details } : p)),
+      })),
+
+    addTaskStep: (step) =>
+      set((s) => ({
+        taskSteps: [
+          ...s.taskSteps,
+          {
+            ...step,
+            id: `T${Date.now()}${Math.floor(Math.random() * 1000)}`,
+          },
+        ],
+      })),
+
+    updateTaskStep: (id, patch) =>
+      set((s) => ({
+        taskSteps: s.taskSteps.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+      })),
+
+    deleteTaskStep: (id) =>
+      set((s) => ({
+        taskSteps: s.taskSteps.filter((t) => t.id !== id),
+      })),
+
+    toggleTaskStepStatus: (id, newStatus) =>
+      set((s) => ({
+        taskSteps: s.taskSteps.map((t) =>
+          t.id === id
+            ? {
+                ...t,
+                status: newStatus,
+                completedAt: newStatus === "DONE" ? nowISO() : t.completedAt,
+              }
+            : t
+        ),
       })),
 
     openDrawerForPart: (partId) => set({ activePartId: partId, drawerOpen: true }),

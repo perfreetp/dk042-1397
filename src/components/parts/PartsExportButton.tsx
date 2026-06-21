@@ -1,11 +1,13 @@
 import { useState, useMemo } from "react";
 import { Download, X, Copy, Check, FileSpreadsheet } from "lucide-react";
-import type { LifePart } from "@/types";
-import { RISK_LABEL, SCHEDULE_LABEL } from "@/types";
+import type { LifePart, ScheduleConflict } from "@/types";
+import { RISK_LABEL, SCHEDULE_LABEL, CONFLICT_TYPE_LABEL } from "@/types";
 import { RISK_ORDER } from "@/utils/riskUtils";
 import { riskColor } from "@/utils/riskUtils";
 import { formatDate } from "@/utils/dateUtils";
+import { detectConflicts } from "@/utils/conflictUtils";
 import { useAppStore } from "@/store/useAppStore";
+import { findTasksByPartId } from "@/store/selectors";
 
 interface PartsExportButtonProps {
   parts: LifePart[];
@@ -43,6 +45,9 @@ const PLANNING_HEADERS = [
   "处理方式",
   "待办交接",
   "最新交接进展",
+  "处理进度",
+  "排程冲突",
+  "交接未确认",
 ];
 
 function escapeCSVField(value: string): string {
@@ -57,6 +62,7 @@ export default function PartsExportButton({ parts }: PartsExportButtonProps) {
   const [copied, setCopied] = useState(false);
   const [version, setVersion] = useState<ExportVersion>("BASIC");
 
+  const taskSteps = useAppStore((s) => s.taskSteps);
   const handoverNotes = useAppStore((s) => s.handoverNotes);
 
   const noteInfoMap = useMemo(() => {
@@ -85,6 +91,65 @@ export default function PartsExportButton({ parts }: PartsExportButtonProps) {
       return a.expiryDate.localeCompare(b.expiryDate);
     });
   }, [parts]);
+
+  const partConflictsMap = useMemo(() => {
+    const scheduled = sortedParts.filter((p) => p.isScheduled && p.plannedDate);
+    const all = detectConflicts(scheduled);
+    const map = new Map<string, ScheduleConflict[]>();
+    for (const c of all) {
+      for (const pid of c.relatedPartIds) {
+        if (!map.has(pid)) map.set(pid, []);
+        map.get(pid)!.push(c);
+      }
+    }
+    return map;
+  }, [sortedParts]);
+
+  const partTaskSummary = useMemo(() => {
+    const todayStr = formatDate(new Date());
+    const map = new Map<string, { total: number; done: number; overdue: number }>();
+    for (const p of sortedParts) {
+      const tasks = findTasksByPartId(taskSteps, p.id);
+      const done = tasks.filter((t) => t.status === "DONE").length;
+      const overdue = tasks.filter((t) => t.status === "OVERDUE" || (t.status !== "DONE" && t.dueDate < todayStr)).length;
+      map.set(p.id, { total: tasks.length, done, overdue });
+    }
+    return map;
+  }, [sortedParts, taskSteps]);
+
+  const partUnconfirmedNotes = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const n of handoverNotes) {
+      if (n.status !== "CONFIRMED") {
+        map.set(n.partId, (map.get(n.partId) || 0) + 1);
+      }
+    }
+    return map;
+  }, [handoverNotes]);
+
+  const riskSummary = useMemo(() => {
+    const conflictPartIds = new Set<string>();
+    for (const c of partConflictsMap.values()) {
+      for (const conf of c) {
+        for (const pid of conf.relatedPartIds) {
+          conflictPartIds.add(pid);
+        }
+      }
+    }
+    let totalUnconfirmed = 0;
+    for (const n of handoverNotes) {
+      if (n.status !== "CONFIRMED") totalUnconfirmed++;
+    }
+    let totalOverdue = 0;
+    for (const s of partTaskSummary.values()) {
+      totalOverdue += s.overdue;
+    }
+    return {
+      conflictCount: conflictPartIds.size,
+      unconfirmedCount: totalUnconfirmed,
+      overdueCount: totalOverdue,
+    };
+  }, [partConflictsMap, handoverNotes, partTaskSummary]);
 
   const stats = useMemo(() => {
     const total = sortedParts.length;
@@ -140,6 +205,21 @@ export default function PartsExportButton({ parts }: PartsExportButtonProps) {
       const noteInfo = noteInfoMap.get(p.id);
       const pendingCount = noteInfo?.pendingCount || 0;
       const latestContent = noteInfo?.latestContent || "";
+      const taskSum = partTaskSummary.get(p.id);
+      const conflicts = partConflictsMap.get(p.id) || [];
+      const unconfirmed = partUnconfirmedNotes.get(p.id) || 0;
+
+      let progressText = "-";
+      if (taskSum && taskSum.total > 0) {
+        progressText = `已完成${taskSum.done}/共${taskSum.total}`;
+        if (taskSum.overdue > 0) {
+          progressText += ` · ${taskSum.overdue}项逾期`;
+        }
+      }
+
+      const conflictText = conflicts.length > 0 ? `${conflicts.length}个冲突` : "-";
+      const unconfirmedText = unconfirmed > 0 ? `${unconfirmed}条未确认` : "-";
+
       const row = [
         RISK_LABEL[p.riskLevel],
         p.aircraftReg,
@@ -157,11 +237,14 @@ export default function PartsExportButton({ parts }: PartsExportButtonProps) {
         SCHEDULE_LABEL[p.scheduleStatus],
         pendingCount > 0 ? `${pendingCount}条待办` : "-",
         latestContent || "-",
+        progressText,
+        conflictText,
+        unconfirmedText,
       ];
       lines.push(row.join("\t"));
     }
     return lines.join("\n");
-  }, [sortedParts, noteInfoMap]);
+  }, [sortedParts, noteInfoMap, partTaskSummary, partConflictsMap, partUnconfirmedNotes]);
 
   const planningCsv = useMemo(() => {
     const lines = [PLANNING_HEADERS.map(escapeCSVField).join(",")];
@@ -169,6 +252,21 @@ export default function PartsExportButton({ parts }: PartsExportButtonProps) {
       const noteInfo = noteInfoMap.get(p.id);
       const pendingCount = noteInfo?.pendingCount || 0;
       const latestContent = noteInfo?.latestContent || "";
+      const taskSum = partTaskSummary.get(p.id);
+      const conflicts = partConflictsMap.get(p.id) || [];
+      const unconfirmed = partUnconfirmedNotes.get(p.id) || 0;
+
+      let progressText = "-";
+      if (taskSum && taskSum.total > 0) {
+        progressText = `已完成${taskSum.done}/共${taskSum.total}`;
+        if (taskSum.overdue > 0) {
+          progressText += ` · ${taskSum.overdue}项逾期`;
+        }
+      }
+
+      const conflictText = conflicts.length > 0 ? `${conflicts.length}个冲突` : "-";
+      const unconfirmedText = unconfirmed > 0 ? `${unconfirmed}条未确认` : "-";
+
       const row = [
         RISK_LABEL[p.riskLevel],
         p.aircraftReg,
@@ -186,11 +284,14 @@ export default function PartsExportButton({ parts }: PartsExportButtonProps) {
         SCHEDULE_LABEL[p.scheduleStatus],
         pendingCount > 0 ? `${pendingCount}条待办` : "-",
         latestContent || "-",
+        progressText,
+        conflictText,
+        unconfirmedText,
       ].map(escapeCSVField);
       lines.push(row.join(","));
     }
     return "\uFEFF" + lines.join("\n");
-  }, [sortedParts, noteInfoMap]);
+  }, [sortedParts, noteInfoMap, partTaskSummary, partConflictsMap, partUnconfirmedNotes]);
 
   const currentTsv = version === "BASIC" ? basicTsv : planningTsv;
   const currentCsv = version === "BASIC" ? basicCsv : planningCsv;
@@ -222,7 +323,7 @@ export default function PartsExportButton({ parts }: PartsExportButtonProps) {
 
   const copyBtnText = version === "BASIC" ? "复制台账到剪贴板" : "复制排程计划(维修用)";
   const downloadBtnText = version === "BASIC" ? "下载台账 CSV" : "下载排程计划CSV(库房用)";
-  const tableColSpan = version === "BASIC" ? 10 : 16;
+  const tableColSpan = version === "BASIC" ? 10 : 19;
 
   return (
     <>
@@ -291,6 +392,51 @@ export default function PartsExportButton({ parts }: PartsExportButtonProps) {
                 </button>
               </div>
             </div>
+
+            {version === "PLANNING" && (
+              <div className="px-6 py-3 border-b border-gray-100 bg-gradient-to-r from-amber-50 to-orange-50">
+                <div className="text-sm font-semibold text-gray-700 mb-2">
+                  📊 本次导出台账汇总（{sortedParts.length}件）
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  <span className="inline-flex items-center gap-1.5">
+                    ⚠️ 排程冲突
+                    {riskSummary.conflictCount > 0 ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold text-white bg-[#c53030]">
+                        {riskSummary.conflictCount} 件
+                      </span>
+                    ) : (
+                      <span className="text-gray-500">0 件</span>
+                    )}
+                  </span>
+                  <span className="text-gray-300">|</span>
+                  <span className="inline-flex items-center gap-1.5">
+                    🔔 交接未确认
+                    {riskSummary.unconfirmedCount > 0 ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold text-white bg-[#f97316]">
+                        {riskSummary.unconfirmedCount} 件
+                      </span>
+                    ) : (
+                      <span className="text-gray-500">0 件</span>
+                    )}
+                  </span>
+                  <span className="text-gray-300">|</span>
+                  <span className="inline-flex items-center gap-1.5">
+                    ⏰ 处理逾期待办
+                    {riskSummary.overdueCount > 0 ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold text-white bg-[#c53030]">
+                        {riskSummary.overdueCount} 项
+                      </span>
+                    ) : (
+                      <span className="text-gray-500">0 项</span>
+                    )}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400 mt-1.5">
+                  以上项目建议在发送给维修控制/航材库房前逐一确认闭环
+                </p>
+              </div>
+            )}
 
             <div className="flex-1 overflow-auto max-h-[60vh]">
               {version === "BASIC" ? (
@@ -379,6 +525,9 @@ export default function PartsExportButton({ parts }: PartsExportButtonProps) {
                       <th className="text-left px-3 py-3 font-semibold whitespace-nowrap min-w-[80px]">处理方式</th>
                       <th className="text-left px-3 py-3 font-semibold whitespace-nowrap min-w-[88px]">待办交接</th>
                       <th className="text-left px-3 py-3 font-semibold whitespace-nowrap min-w-[200px]">最新交接进展</th>
+                      <th className="text-left px-3 py-3 font-semibold whitespace-nowrap min-w-[110px]">📋 处理进度</th>
+                      <th className="text-left px-3 py-3 font-semibold whitespace-nowrap min-w-[90px]">⚠️ 排程冲突</th>
+                      <th className="text-left px-3 py-3 font-semibold whitespace-nowrap min-w-[110px]">🔔 交接未确认</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -394,6 +543,9 @@ export default function PartsExportButton({ parts }: PartsExportButtonProps) {
                       const noteInfo = noteInfoMap.get(p.id);
                       const pendingCount = noteInfo?.pendingCount || 0;
                       const latestContent = noteInfo?.latestContent || "";
+                      const taskSum = partTaskSummary.get(p.id);
+                      const conflicts = partConflictsMap.get(p.id) || [];
+                      const unconfirmed = partUnconfirmedNotes.get(p.id) || 0;
                       return (
                         <tr key={p.id} className={`${rowBg} border-t border-gray-100`}>
                           <td className="px-3 py-3">
@@ -457,6 +609,43 @@ export default function PartsExportButton({ parts }: PartsExportButtonProps) {
                               <span>{latestContent.length > 20 ? latestContent.slice(0, 20) + "…" : latestContent}</span>
                             ) : (
                               <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-3 whitespace-nowrap text-xs">
+                            {taskSum && taskSum.total > 0 ? (
+                              <span className="inline-flex items-center gap-1">
+                                <span className="font-medium text-gray-700">
+                                  已完成{taskSum.done}/共{taskSum.total}
+                                </span>
+                                {taskSum.overdue > 0 && (
+                                  <span className="text-[#c53030] font-semibold">
+                                    · {taskSum.overdue}项逾期
+                                  </span>
+                                )}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-3 whitespace-nowrap">
+                            {conflicts.length > 0 ? (
+                              <span
+                                className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold text-white bg-[#c53030] cursor-help"
+                                title={conflicts.map((c) => `${CONFLICT_TYPE_LABEL[c.type]}: ${c.description}`).join("\n")}
+                              >
+                                {conflicts.length}个冲突
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 text-xs">-</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-3 whitespace-nowrap">
+                            {unconfirmed > 0 ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold text-white bg-[#f97316]">
+                                {unconfirmed}条未确认
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 text-xs">-</span>
                             )}
                           </td>
                         </tr>

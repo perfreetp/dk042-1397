@@ -4,6 +4,8 @@ import { computeScheduledParts } from "@/store/selectors";
 import type { LifePart, ScheduleStatus } from "@/types";
 import { RISK_LABEL, SCHEDULE_LABEL } from "@/types";
 import { riskBarClass } from "@/utils/riskUtils";
+import { detectConflicts, getConflictsForPart, getConflictsOnDate, getMaxSeverity } from "@/utils/conflictUtils";
+import type { ScheduleConflict } from "@/types";
 import {
   ChevronLeft,
   ChevronRight,
@@ -14,6 +16,7 @@ import {
   ShoppingCart,
   Wrench,
   CalendarCheck2,
+  AlertTriangle,
 } from "lucide-react";
 
 const WEEK_DAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
@@ -61,10 +64,15 @@ function ScheduleBadge({ status }: { status: ScheduleStatus }) {
 interface PartRowProps {
   part: LifePart;
   onClick: () => void;
+  conflicts?: ScheduleConflict[];
 }
 
-function PartRow({ part, onClick }: PartRowProps) {
+function PartRow({ part, onClick, conflicts }: PartRowProps) {
   const life = getShorterLife(part);
+  const partConflicts = conflicts || [];
+  const hasConflicts = partConflicts.length > 0;
+  const maxSev = hasConflicts ? getMaxSeverity(partConflicts) : null;
+
   return (
     <div
       onClick={onClick}
@@ -73,6 +81,20 @@ function PartRow({ part, onClick }: PartRowProps) {
       <div className={`absolute left-0 top-2 bottom-2 w-1 rounded-full ${riskBarClass(part.riskLevel)}`} />
       <div className="pl-2.5 flex-1 min-w-0">
         <div className="flex items-start gap-2 flex-wrap">
+          {hasConflicts && (
+            <span
+              className={[
+                "inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-bold shrink-0",
+                maxSev === "CRITICAL"
+                  ? "bg-alert-critical/15 text-alert-critical border border-alert-critical/30"
+                  : "bg-alert-warning/15 text-alert-warning border border-alert-warning/30",
+              ].join(" ")}
+              title={`涉及 ${partConflicts.length} 个排程冲突`}
+            >
+              <AlertTriangle className="w-2.5 h-2.5" />
+              冲突
+            </span>
+          )}
           <span
             className={[
               "px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider shrink-0",
@@ -114,6 +136,23 @@ function PartRow({ part, onClick }: PartRowProps) {
             </span>
           )}
         </div>
+        {hasConflicts && (
+          <div className="mt-2 space-y-1">
+            {partConflicts.map((c) => (
+              <div
+                key={c.id}
+                className={[
+                  "text-[10px] px-2 py-1 rounded border leading-snug",
+                  c.severity === "CRITICAL"
+                    ? "bg-alert-critical/10 border-alert-critical/30 text-alert-critical"
+                    : "bg-alert-warning/10 border-alert-warning/30 text-alert-warning",
+                ].join(" ")}
+              >
+                ⚠️ {c.description}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -134,6 +173,9 @@ export default function WeeklyPlanView() {
     () => computeScheduledParts(parts, scheduledPartIds),
     [parts, scheduledPartIds]
   );
+
+  const conflicts = useMemo(() => detectConflicts(scheduledParts), [scheduledParts]);
+  const hasCriticalConflict = conflicts.some((c) => c.severity === "CRITICAL");
 
   const dateRange = useMemo(() => {
     const days: Date[] = [];
@@ -258,6 +300,41 @@ export default function WeeklyPlanView() {
             <span className="text-sm font-bold text-emerald-700 font-mono-tabular">{stats.aircraft}</span>
             <span className="text-[11px] text-gray-500">架</span>
           </div>
+          <div
+            className={[
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border",
+              conflicts.length > 0
+                ? hasCriticalConflict
+                  ? "bg-alert-critical/10 border-alert-critical/30"
+                  : "bg-alert-warning/10 border-alert-warning/30"
+                : "bg-alert-safe/10 border-alert-safe/30",
+            ].join(" ")}
+          >
+            <AlertTriangle
+              className={[
+                "w-3.5 h-3.5",
+                conflicts.length > 0
+                  ? hasCriticalConflict
+                    ? "text-alert-critical"
+                    : "text-alert-warning"
+                  : "text-alert-safe",
+              ].join(" ")}
+            />
+            <span className="text-[11px] text-gray-500">排程冲突</span>
+            <span
+              className={[
+                "text-sm font-bold font-mono-tabular",
+                conflicts.length > 0
+                  ? hasCriticalConflict
+                    ? "text-alert-critical"
+                    : "text-alert-warning"
+                  : "text-alert-safe",
+              ].join(" ")}
+            >
+              {conflicts.length}
+            </span>
+            <span className="text-[11px] text-gray-500">个</span>
+          </div>
         </div>
       </div>
 
@@ -273,15 +350,30 @@ export default function WeeklyPlanView() {
                 0
               )
             : 0;
+          const dayConflicts = getConflictsOnDate(conflicts, dateKey);
+          const dayHasCritical = dayConflicts.some((c) => c.severity === "CRITICAL");
 
           return (
             <div key={dateKey} className="rounded-xl border border-gray-200 overflow-hidden">
               {/* Date separator */}
               <div className="px-4 py-2.5 bg-gradient-to-r from-aviation-50 via-aviation-50/70 to-white border-b border-aviation-100 flex items-center justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-base">📆</span>
                   <span className="font-mono-tabular text-sm font-bold text-aviation-800">{dateKey}</span>
                   <span className="text-xs font-medium text-aviation-600">{weekDay}</span>
+                  {dayConflicts.length > 0 && (
+                    <span
+                      className={[
+                        "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold",
+                        dayHasCritical
+                          ? "bg-alert-critical/15 text-alert-critical border border-alert-critical/30"
+                          : "bg-alert-warning/15 text-alert-warning border border-alert-warning/30",
+                      ].join(" ")}
+                    >
+                      <AlertTriangle className="w-2.5 h-2.5" />
+                      {dayConflicts.length}个冲突
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span className="h-4 w-px bg-aviation-200" />
@@ -339,6 +431,7 @@ export default function WeeklyPlanView() {
                                     key={p.id}
                                     part={p}
                                     onClick={() => openDrawerForPart(p.id)}
+                                    conflicts={getConflictsForPart(conflicts, p.id)}
                                   />
                                 ))}
                               </div>
@@ -410,6 +503,7 @@ export default function WeeklyPlanView() {
                               key={p.id}
                               part={p}
                               onClick={() => openDrawerForPart(p.id)}
+                              conflicts={getConflictsForPart(conflicts, p.id)}
                             />
                           ))}
                         </div>

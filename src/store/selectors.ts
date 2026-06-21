@@ -5,6 +5,8 @@ import type {
   RemovalRecord,
   AirworthinessDoc,
   HandoverNote,
+  TaskStep,
+  TaskStatus,
 } from "@/types";
 import { RISK_ORDER } from "@/utils/riskUtils";
 
@@ -94,5 +96,32 @@ export function findPartsWithNotes(parts: LifePart[], notes: HandoverNote[]): Li
     const aLatest = aNotes.reduce((acc, n) => (n.createdAt > acc ? n.createdAt : acc), "");
     const bLatest = bNotes.reduce((acc, n) => (n.createdAt > acc ? n.createdAt : acc), "");
     return bLatest.localeCompare(aLatest);
+  });
+}
+
+export function findTasksByPartId(taskSteps: TaskStep[], partId: string): TaskStep[] {
+  return taskSteps
+    .filter((t) => t.partId === partId)
+    .sort((a, b) => {
+      const aDone = a.status === "DONE" ? 1 : 0;
+      const bDone = b.status === "DONE" ? 1 : 0;
+      if (aDone !== bDone) return aDone - bDone;
+      return a.dueDate.localeCompare(b.dueDate);
+    });
+}
+
+export function findOverdueTasks(taskSteps: TaskStep[], todayISO: string): TaskStep[] {
+  return taskSteps.filter((t) => t.status === "OVERDUE" || (t.status !== "DONE" && t.dueDate < todayISO));
+}
+
+export function markOverdueTasks(taskSteps: TaskStep[], todayISO: string): TaskStep[] {
+  return taskSteps.map((t) => {
+    if (t.status !== "DONE" && t.status !== "OVERDUE" && t.dueDate < todayISO) {
+      return { ...t, status: "OVERDUE" as const };
+    }
+    if (t.status === "OVERDUE" && t.dueDate >= todayISO) {
+      return { ...t, status: "PENDING" as const };
+    }
+    return t;
   });
 }

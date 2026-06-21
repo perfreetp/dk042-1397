@@ -5,6 +5,9 @@ import type {
   HandoverNote,
   PartCategory,
   RiskLevel,
+  TaskStep,
+  TaskType,
+  TaskStatus,
 } from "@/types";
 import { addDays, formatDate } from "@/utils/dateUtils";
 
@@ -55,6 +58,9 @@ function makePart(
     scheduleStatus: opts.scheduleStatus ?? "NONE",
     isScheduled: opts.isScheduled ?? false,
     scheduledDate: opts.scheduledDate,
+    plannedDate: opts.plannedDate,
+    plannedBay: opts.plannedBay,
+    plannedBase: opts.plannedBase,
     lastRemovalId: opts.lastRemovalId,
     airworthinessRefs: opts.airworthinessRefs ?? [],
   };
@@ -67,6 +73,10 @@ export const mockParts: LifePart[] = [
     installPosition: "左发 #1 低压压气机一级盘",
     airworthinessRefs: ["CAAC-AD-2023-08-12", "EASA AD 2022-0245"],
     scheduleStatus: "NEED_ORDER",
+    isScheduled: true,
+    plannedDate: formatDate(addDays(now, 20)),
+    plannedBay: "A12",
+    plannedBase: "PEK-MRO(北京基地)",
     lastRemovalId: "R001",
   }),
   makePart(2, "ENGINE_LLP", "CRITICAL", 22, 0.045, {
@@ -74,6 +84,10 @@ export const mockParts: LifePart[] = [
     aircraftReg: "B-6234",
     installPosition: "右发 #2 HPT Stage 1 Disk",
     airworthinessRefs: ["FAA AD 2023-12-51"],
+    isScheduled: true,
+    plannedDate: formatDate(addDays(now, 30)),
+    plannedBay: "B03",
+    plannedBase: "SHA-BASE(上海基地)",
     lastRemovalId: "R002",
   }),
   makePart(3, "LANDING_GEAR", "CRITICAL", 12, 0.048, {
@@ -82,6 +96,10 @@ export const mockParts: LifePart[] = [
     installPosition: "左侧主起落架 MLG-L",
     airworthinessRefs: ["CAAC-AD-2022-23-01"],
     scheduleStatus: "NEED_REPAIR",
+    isScheduled: true,
+    plannedDate: formatDate(addDays(now, 40)),
+    plannedBay: "C07",
+    plannedBase: "PEK-MRO(北京基地)",
     lastRemovalId: "R003",
   }),
   makePart(4, "ENGINE_LLP", "WARNING", 38, 0.12, {
@@ -89,6 +107,10 @@ export const mockParts: LifePart[] = [
     aircraftReg: "B-5432",
     installPosition: "左发 #1 LPT Stage 3",
     airworthinessRefs: ["EASA AD 2023-0091"],
+    isScheduled: true,
+    plannedDate: formatDate(addDays(now, 20)),
+    plannedBay: "A12",
+    plannedBase: "PEK-MRO(北京基地)",
     lastRemovalId: "R004",
   }),
   makePart(5, "EMERGENCY_EQ", "WARNING", 26, 0.10, {
@@ -97,6 +119,10 @@ export const mockParts: LifePart[] = [
     installPosition: "后货舱壁板 AFT CARGO RH",
     airworthinessRefs: ["CAAC-AD-2024-01-05"],
     scheduleStatus: "MERGE_CHECK",
+    isScheduled: true,
+    plannedDate: formatDate(addDays(now, 8)),
+    plannedBay: "D02",
+    plannedBase: "CAN-TECH(广州技术)",
     lastRemovalId: "R005",
   }),
   makePart(6, "LANDING_GEAR", "WARNING", 35, 0.13, {
@@ -104,6 +130,7 @@ export const mockParts: LifePart[] = [
     aircraftReg: "B-3012",
     installPosition: "前起落架 NLG 收放作动筒",
     airworthinessRefs: ["FAA AD 2022-08-15"],
+    isScheduled: false,
     lastRemovalId: "R006",
   }),
   makePart(7, "ENGINE_LLP", "CAUTION", 58, 0.27, {
@@ -111,6 +138,10 @@ export const mockParts: LifePart[] = [
     aircraftReg: "B-5123",
     installPosition: "右发 #2 燃烧室机匣组件",
     airworthinessRefs: ["CAAC-AD-2023-14-02"],
+    isScheduled: true,
+    plannedDate: formatDate(addDays(now, 20)),
+    plannedBay: "A12",
+    plannedBase: "PEK-MRO(北京基地)",
     lastRemovalId: "R007",
   }),
   makePart(8, "EMERGENCY_EQ", "CAUTION", 49, 0.22, {
@@ -118,6 +149,7 @@ export const mockParts: LifePart[] = [
     aircraftReg: "B-6543",
     installPosition: "E/E舱 氧气系统",
     airworthinessRefs: ["FAA AD 2023-09-27"],
+    isScheduled: false,
     lastRemovalId: "R008",
   }),
   makePart(9, "LANDING_GEAR", "CAUTION", 65, 0.28, {
@@ -126,6 +158,10 @@ export const mockParts: LifePart[] = [
     installPosition: "主起落架 四轮刹车组",
     airworthinessRefs: ["EASA AD 2024-0108"],
     scheduleStatus: "MERGE_CHECK",
+    isScheduled: true,
+    plannedDate: formatDate(addDays(now, 33)),
+    plannedBay: "A12",
+    plannedBase: "PEK-MRO(北京基地)",
     lastRemovalId: "R009",
   }),
   makePart(10, "ENGINE_LLP", "NORMAL", 120, 0.55, {
@@ -133,6 +169,7 @@ export const mockParts: LifePart[] = [
     aircraftReg: "B-5489",
     installPosition: "左发 #1 HPC Stage 4",
     airworthinessRefs: ["CAAC-AD-2022-19-03"],
+    isScheduled: false,
     lastRemovalId: "R010",
   }),
   makePart(11, "OTHER", "WARNING", 29, 0.14, {
@@ -140,6 +177,10 @@ export const mockParts: LifePart[] = [
     aircraftReg: "B-5123",
     installPosition: "APU 舱 APU 涡轮一级",
     airworthinessRefs: ["FAA AD 2023-11-45"],
+    isScheduled: true,
+    plannedDate: formatDate(addDays(now, 20)),
+    plannedBay: "A12",
+    plannedBase: "PEK-MRO(北京基地)",
     lastRemovalId: "R011",
   }),
   makePart(12, "ENGINE_LLP", "NORMAL", 240, 0.72, {
@@ -147,6 +188,7 @@ export const mockParts: LifePart[] = [
     aircraftReg: "B-6789",
     installPosition: "左发 #1 风扇轴组件",
     airworthinessRefs: ["EASA AD 2022-0876"],
+    isScheduled: false,
     lastRemovalId: "R012",
   }),
   makePart(13, "EMERGENCY_EQ", "CAUTION", 72, 0.30, {
@@ -154,6 +196,7 @@ export const mockParts: LifePart[] = [
     aircraftReg: "B-5123",
     installPosition: "R3 舱门滑梯气瓶",
     airworthinessRefs: ["CAAC-AD-2023-06-18"],
+    isScheduled: false,
     lastRemovalId: "R013",
   }),
   makePart(14, "LANDING_GEAR", "NORMAL", 180, 0.62, {
@@ -161,6 +204,7 @@ export const mockParts: LifePart[] = [
     aircraftReg: "B-5432",
     installPosition: "前起落架 转弯作动器",
     airworthinessRefs: ["FAA AD 2022-14-02"],
+    isScheduled: false,
     lastRemovalId: "R014",
   }),
   makePart(15, "ENGINE_LLP", "WARNING", 31, 0.11, {
@@ -169,6 +213,10 @@ export const mockParts: LifePart[] = [
     installPosition: "右发 #2 HPT Stage 2 Blade",
     airworthinessRefs: ["CAAC-AD-2024-02-11"],
     scheduleStatus: "NEED_ORDER",
+    isScheduled: true,
+    plannedDate: formatDate(addDays(now, 40)),
+    plannedBay: "C07",
+    plannedBase: "PEK-MRO(北京基地)",
     lastRemovalId: "R015",
   }),
 ];
@@ -269,4 +317,71 @@ export const mockNotes: HandoverNote[] = [
     confirmedBy: "周立群",
     confirmedAt: "2026-06-19T11:00:00",
   },
+];
+
+function makeTask(
+  id: string,
+  partId: string,
+  type: TaskType,
+  status: TaskStatus,
+  dueDaysOffset: number,
+  assignee: string,
+  order: number
+): TaskStep {
+  return {
+    id,
+    partId,
+    type,
+    title: type === "ORDER" ? "发起采购订单" :
+           type === "REPAIR" ? "安排送修" :
+           type === "MERGE" ? "合并到定检工作包" :
+           type === "PREPARE" ? "准备备件" :
+           type === "INSTALL" ? "现场安装与检查" : "适航验证与签字放行",
+    status,
+    assignee,
+    dueDate: formatDate(addDays(now, dueDaysOffset)),
+    completedAt: status === "DONE" ? formatDate(addDays(now, dueDaysOffset - 2)) : undefined,
+    notes: "",
+    order,
+  };
+}
+
+export const mockTaskSteps: TaskStep[] = [
+  makeTask("T0001", "P0001", "ORDER", "IN_PROGRESS", -3, "航材采购-李经理", 1),
+  makeTask("T0002", "P0001", "PREPARE", "PENDING", 5, "库房-王主管", 2),
+  makeTask("T0003", "P0001", "INSTALL", "PENDING", 20, "定检车间-张工", 3),
+  makeTask("T0004", "P0001", "VERIFY", "PENDING", 22, "质量部-刘检验", 4),
+
+  makeTask("T0005", "P0002", "ORDER", "PENDING", -1, "航材采购-李经理", 1),
+  makeTask("T0006", "P0002", "PREPARE", "PENDING", 10, "库房-王主管", 2),
+  makeTask("T0007", "P0002", "INSTALL", "PENDING", 30, "发动机车间-赵工", 3),
+
+  makeTask("T0008", "P0003", "REPAIR", "OVERDUE", -5, "外委修办-陈工", 1),
+  makeTask("T0009", "P0003", "INSTALL", "PENDING", 40, "起落架车间-孙工", 2),
+  makeTask("T0010", "P0003", "VERIFY", "PENDING", 45, "质量部-刘检验", 3),
+
+  makeTask("T0011", "P0004", "ORDER", "DONE", -10, "航材采购-李经理", 1),
+  makeTask("T0012", "P0004", "PREPARE", "DONE", -5, "库房-王主管", 2),
+  makeTask("T0013", "P0004", "INSTALL", "IN_PROGRESS", -1, "发动机车间-赵工", 3),
+
+  makeTask("T0014", "P0005", "ORDER", "DONE", -5, "航材采购-李经理", 1),
+  makeTask("T0015", "P0005", "MERGE", "DONE", 8, "定检计划-周工", 2),
+  makeTask("T0016", "P0005", "INSTALL", "PENDING", 8, "应急设备车间-钱工", 3),
+
+  makeTask("T0017", "P0006", "REPAIR", "PENDING", 15, "外委修办-陈工", 1),
+  makeTask("T0018", "P0006", "INSTALL", "PENDING", 35, "起落架车间-孙工", 2),
+
+  makeTask("T0019", "P0007", "ORDER", "PENDING", 30, "航材采购-李经理", 1),
+  makeTask("T0020", "P0007", "INSTALL", "PENDING", 60, "发动机车间-赵工", 2),
+
+  makeTask("T0021", "P0008", "ORDER", "PENDING", 25, "航材采购-李经理", 1),
+  makeTask("T0022", "P0008", "INSTALL", "PENDING", 50, "应急设备车间-钱工", 2),
+
+  makeTask("T0023", "P0009", "MERGE", "DONE", -10, "定检计划-周工", 1),
+  makeTask("T0024", "P0009", "INSTALL", "PENDING", 33, "起落架车间-孙工", 2),
+
+  makeTask("T0025", "P0015", "ORDER", "OVERDUE", -7, "航材采购-李经理", 1),
+  makeTask("T0026", "P0015", "PREPARE", "PENDING", 3, "库房-王主管", 2),
+  makeTask("T0027", "P0015", "INSTALL", "PENDING", 18, "发动机车间-赵工", 3),
+  makeTask("T0028", "P0015", "VERIFY", "PENDING", 20, "质量部-刘检验", 4),
 ];

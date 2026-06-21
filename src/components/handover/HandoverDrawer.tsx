@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useAppStore } from "@/store/useAppStore";
 import { findNotesByPartId, findPartsWithNotes, computePendingNotesCount } from "@/store/selectors";
 import NoteItem from "./NoteItem";
@@ -36,6 +36,8 @@ export default function HandoverDrawer() {
   const [aircraftFilter, setAircraftFilter] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("PART");
   const [detailPart, setDetailPart] = useState<LifePart | null>(null);
+  const [isFilteredMatch, setIsFilteredMatch] = useState(false);
+  const prevAircraftFilterRef = useRef("");
 
   const partsWithNotes = useMemo(() => findPartsWithNotes(parts, handoverNotes), [parts, handoverNotes]);
 
@@ -44,6 +46,27 @@ export default function HandoverDrawer() {
     const kw = aircraftFilter.trim().toLowerCase();
     return partsWithNotes.filter(p => p.aircraftReg.toLowerCase().includes(kw));
   }, [partsWithNotes, aircraftFilter]);
+
+  useEffect(() => {
+    const filterChanged = prevAircraftFilterRef.current !== aircraftFilter;
+    prevAircraftFilterRef.current = aircraftFilter;
+
+    if (filteredPartsWithNotes.length === 0) {
+      setIsFilteredMatch(false);
+      return;
+    }
+    const currentIsInFiltered = filteredPartsWithNotes.some(p => p.id === activePartId);
+    if (!activePartId || !currentIsInFiltered) {
+      openDrawerForPart(filteredPartsWithNotes[0].id);
+      if (aircraftFilter.trim()) {
+        setIsFilteredMatch(true);
+      }
+    } else if (filterChanged && aircraftFilter.trim()) {
+      setIsFilteredMatch(true);
+    } else if (!aircraftFilter.trim()) {
+      setIsFilteredMatch(false);
+    }
+  }, [filteredPartsWithNotes, activePartId, openDrawerForPart, aircraftFilter]);
 
   const currentPart: LifePart | undefined = useMemo(() => {
     if (activePartId) return parts.find(p => p.id === activePartId);
@@ -256,8 +279,15 @@ export default function HandoverDrawer() {
                       <Plane className="w-5 h-5" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold text-aviation-800 leading-snug line-clamp-2">
-                        {currentPart.name}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-aviation-800 leading-snug line-clamp-2">
+                          {currentPart.name}
+                        </span>
+                        {isFilteredMatch && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-semibold border border-blue-200">
+                            🔍 筛选匹配
+                          </span>
+                        )}
                       </div>
                       <div className="mt-1 flex items-center gap-2 flex-wrap text-[11px]">
                         <span className="font-mono-tabular text-gray-500">
@@ -265,7 +295,17 @@ export default function HandoverDrawer() {
                         </span>
                         <span className="text-gray-300">·</span>
                         <span className="font-mono-tabular text-gray-700 font-semibold">
-                          {currentPart.aircraftReg}
+                          ✈️ {currentPart.aircraftReg}
+                        </span>
+                        <span className="text-gray-300">·</span>
+                        <span
+                          className="px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                          style={{
+                            backgroundColor: `${riskColor(currentPart.riskLevel)}15`,
+                            color: riskColor(currentPart.riskLevel),
+                          }}
+                        >
+                          {RISK_LABEL[currentPart.riskLevel]}
                         </span>
                         <span className="text-gray-300">·</span>
                         <span
@@ -355,7 +395,7 @@ export default function HandoverDrawer() {
 
               {currentPart && (
                 <div className="p-4 border-t border-gray-100 bg-gray-50/60">
-                  <NoteForm partId={currentPart.id} />
+                  <NoteForm partId={currentPart.id} partName={currentPart.name} aircraftReg={currentPart.aircraftReg} />
                 </div>
               )}
             </div>
@@ -453,6 +493,9 @@ export default function HandoverDrawer() {
                   </div>
                 </div>
               )}
+            </div>
+            <div className="p-4 border-t border-gray-100 bg-gray-50/60">
+              <NoteForm />
             </div>
           </div>
         )}
