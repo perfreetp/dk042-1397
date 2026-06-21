@@ -8,6 +8,10 @@ import type {
   TaskStep,
   TaskType,
   TaskStatus,
+  TaskComment,
+  TaskAttachment,
+  TaskApproval,
+  AuthorRole,
 } from "@/types";
 import { addDays, formatDate } from "@/utils/dateUtils";
 
@@ -326,7 +330,8 @@ function makeTask(
   status: TaskStatus,
   dueDaysOffset: number,
   assignee: string,
-  order: number
+  order: number,
+  extras: Partial<TaskStep> = {}
 ): TaskStep {
   return {
     id,
@@ -343,11 +348,96 @@ function makeTask(
     completedAt: status === "DONE" ? formatDate(addDays(now, dueDaysOffset - 2)) : undefined,
     notes: "",
     order,
+    requiresApproval: type === "ORDER" || type === "INSTALL" || type === "VERIFY",
+    ...extras,
   };
 }
 
+function mockComments(taskId: string): TaskComment[] {
+  return [
+    {
+      id: `TC-MOCK-${taskId}-1`,
+      taskId,
+      author: "陈明亮",
+      authorRole: "DAY_SHIFT" as AuthorRole,
+      content: "已联系供应商，确认型号与序列号匹配，报价有效期30天。",
+      createdAt: formatDate(addDays(now, -2)) + "T10:30:00",
+    },
+    {
+      id: `TC-MOCK-${taskId}-2`,
+      taskId,
+      author: "刘建华",
+      authorRole: "NIGHT_SHIFT" as AuthorRole,
+      content: "夜班复核：供应商资质已通过年度评审，可正常下单。请白班跟进审批流程。",
+      createdAt: formatDate(addDays(now, -1)) + "T22:15:00",
+    },
+  ];
+}
+
+function mockAttachments(taskId: string): TaskAttachment[] {
+  return [
+    {
+      id: `TA-MOCK-${taskId}-1`,
+      name: `采购报价单-${taskId}.pdf`,
+      type: "PDF",
+      size: "1.8MB",
+      uploadedAt: formatDate(addDays(now, -2)) + "T11:00:00",
+      uploadedBy: "陈明亮",
+    },
+    {
+      id: `TA-MOCK-${taskId}-2`,
+      name: `供应商资质评审表.xlsx`,
+      type: "EXCEL",
+      size: "420KB",
+      uploadedAt: formatDate(addDays(now, -1)) + "T23:00:00",
+      uploadedBy: "刘建华",
+    },
+  ];
+}
+
+function mockApprovalPending(taskId: string): TaskApproval {
+  return {
+    id: `AP-MOCK-${taskId}`,
+    taskId,
+    approver: "周立群",
+    status: "PENDING",
+    required: true,
+    requestedAt: formatDate(addDays(now, -1)) + "T08:00:00",
+  };
+}
+
+function mockApprovalApproved(taskId: string): TaskApproval {
+  return {
+    id: `AP-MOCK-${taskId}`,
+    taskId,
+    approver: "周立群",
+    status: "APPROVED",
+    required: true,
+    requestedAt: formatDate(addDays(now, -6)) + "T09:00:00",
+    respondedAt: formatDate(addDays(now, -5)) + "T14:30:00",
+    comment: "资料完整，同意按方案执行。",
+  };
+}
+
+function mockCommentsSimple(taskId: string): TaskComment[] {
+  return [
+    {
+      id: `TC-MOCK-${taskId}-1`,
+      taskId,
+      author: "周立群",
+      authorRole: "SUPERVISOR" as AuthorRole,
+      content: "请尽快与AMO确认修理周期，避免影响后续定检计划。",
+      createdAt: formatDate(addDays(now, -3)) + "T15:20:00",
+    },
+  ];
+}
+
 export const mockTaskSteps: TaskStep[] = [
-  makeTask("T0001", "P0001", "ORDER", "IN_PROGRESS", -3, "航材采购-李经理", 1),
+  makeTask("T0001", "P0001", "ORDER", "IN_PROGRESS", -3, "航材采购-李经理", 1, {
+    comments: mockComments("T0001"),
+    attachments: mockAttachments("T0001"),
+    approval: mockApprovalPending("T0001"),
+  }),
   makeTask("T0002", "P0001", "PREPARE", "PENDING", 5, "库房-王主管", 2),
   makeTask("T0003", "P0001", "INSTALL", "PENDING", 20, "定检车间-张工", 3),
   makeTask("T0004", "P0001", "VERIFY", "PENDING", 22, "质量部-刘检验", 4),
@@ -356,15 +446,22 @@ export const mockTaskSteps: TaskStep[] = [
   makeTask("T0006", "P0002", "PREPARE", "PENDING", 10, "库房-王主管", 2),
   makeTask("T0007", "P0002", "INSTALL", "PENDING", 30, "发动机车间-赵工", 3),
 
-  makeTask("T0008", "P0003", "REPAIR", "OVERDUE", -5, "外委修办-陈工", 1),
+  makeTask("T0008", "P0003", "REPAIR", "OVERDUE", -5, "外委修办-陈工", 1, {
+    comments: mockCommentsSimple("T0008"),
+  }),
   makeTask("T0009", "P0003", "INSTALL", "PENDING", 40, "起落架车间-孙工", 2),
   makeTask("T0010", "P0003", "VERIFY", "PENDING", 45, "质量部-刘检验", 3),
 
-  makeTask("T0011", "P0004", "ORDER", "DONE", -10, "航材采购-李经理", 1),
+  makeTask("T0011", "P0004", "ORDER", "DONE", -10, "航材采购-李经理", 1, {
+    attachments: mockAttachments("T0011"),
+    approval: mockApprovalApproved("T0011"),
+  }),
   makeTask("T0012", "P0004", "PREPARE", "DONE", -5, "库房-王主管", 2),
   makeTask("T0013", "P0004", "INSTALL", "IN_PROGRESS", -1, "发动机车间-赵工", 3),
 
-  makeTask("T0014", "P0005", "ORDER", "DONE", -5, "航材采购-李经理", 1),
+  makeTask("T0014", "P0005", "ORDER", "DONE", -5, "航材采购-李经理", 1, {
+    approval: mockApprovalApproved("T0014"),
+  }),
   makeTask("T0015", "P0005", "MERGE", "DONE", 8, "定检计划-周工", 2),
   makeTask("T0016", "P0005", "INSTALL", "PENDING", 8, "应急设备车间-钱工", 3),
 
@@ -380,7 +477,19 @@ export const mockTaskSteps: TaskStep[] = [
   makeTask("T0023", "P0009", "MERGE", "DONE", -10, "定检计划-周工", 1),
   makeTask("T0024", "P0009", "INSTALL", "PENDING", 33, "起落架车间-孙工", 2),
 
-  makeTask("T0025", "P0015", "ORDER", "OVERDUE", -7, "航材采购-李经理", 1),
+  makeTask("T0025", "P0015", "ORDER", "OVERDUE", -7, "航材采购-李经理", 1, {
+    comments: mockCommentsSimple("T0025"),
+    attachments: [
+      {
+        id: "TA-MOCK-T0025-1",
+        name: "报废评估报告.pdf",
+        type: "PDF",
+        size: "3.2MB",
+        uploadedAt: formatDate(addDays(now, -4)) + "T10:00:00",
+        uploadedBy: "王晓峰",
+      },
+    ],
+  }),
   makeTask("T0026", "P0015", "PREPARE", "PENDING", 3, "库房-王主管", 2),
   makeTask("T0027", "P0015", "INSTALL", "PENDING", 18, "发动机车间-赵工", 3),
   makeTask("T0028", "P0015", "VERIFY", "PENDING", 20, "质量部-刘检验", 4),

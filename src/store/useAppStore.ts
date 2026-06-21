@@ -9,6 +9,8 @@ import type {
   AuthorRole,
   TaskStep,
   TaskStatus,
+  TaskComment,
+  TaskAttachment,
 } from "@/types";
 import { mockParts, mockRemovals, mockDocs, mockNotes, mockTaskSteps } from "@/data/mockData";
 import type { RemovalRecord, AirworthinessDoc } from "@/types";
@@ -83,6 +85,15 @@ interface AppState {
   updateTaskStep: (id: string, patch: Partial<TaskStep>) => void;
   deleteTaskStep: (id: string) => void;
   toggleTaskStepStatus: (id: string, newStatus: TaskStatus) => void;
+  addTaskComment: (taskId: string, comment: Omit<TaskComment, "id" | "taskId" | "createdAt">) => void;
+  addTaskAttachment: (taskId: string, attachment: Omit<TaskAttachment, "id" | "uploadedAt">) => void;
+  requestTaskApproval: (taskId: string, approverName: string) => void;
+  respondTaskApproval: (
+    taskId: string,
+    response: "APPROVED" | "REJECTED",
+    approver: string,
+    comment?: string
+  ) => void;
 
   openDrawerForPart: (partId: string) => void;
   closeDrawer: () => void;
@@ -204,6 +215,82 @@ export const useAppStore = create<AppState>((set) => {
                 ...t,
                 status: newStatus,
                 completedAt: newStatus === "DONE" ? nowISO() : t.completedAt,
+              }
+            : t
+        ),
+      })),
+
+    addTaskComment: (taskId, comment) =>
+      set((s) => ({
+        taskSteps: s.taskSteps.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                comments: [
+                  ...(t.comments || []),
+                  {
+                    ...comment,
+                    id: `TC${Date.now()}${Math.floor(Math.random() * 100)}`,
+                    taskId,
+                    createdAt: new Date().toISOString(),
+                  },
+                ],
+              }
+            : t
+        ),
+      })),
+
+    addTaskAttachment: (taskId, attachment) =>
+      set((s) => ({
+        taskSteps: s.taskSteps.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                attachments: [
+                  ...(t.attachments || []),
+                  {
+                    ...attachment,
+                    id: `TA${Date.now()}${Math.floor(Math.random() * 100)}`,
+                    uploadedAt: new Date().toISOString(),
+                  },
+                ],
+              }
+            : t
+        ),
+      })),
+
+    requestTaskApproval: (taskId, approverName) =>
+      set((s) => ({
+        taskSteps: s.taskSteps.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                approval: {
+                  id: `AP${Date.now()}`,
+                  taskId,
+                  approver: approverName,
+                  status: "PENDING",
+                  required: true,
+                  requestedAt: new Date().toISOString(),
+                },
+              }
+            : t
+        ),
+      })),
+
+    respondTaskApproval: (taskId, status, approver, comment) =>
+      set((s) => ({
+        taskSteps: s.taskSteps.map((t) =>
+          t.id === taskId && t.approval
+            ? {
+                ...t,
+                approval: {
+                  ...t.approval,
+                  status,
+                  respondedAt: new Date().toISOString(),
+                  approver,
+                  comment,
+                },
               }
             : t
         ),

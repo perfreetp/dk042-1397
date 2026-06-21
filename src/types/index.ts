@@ -14,6 +14,36 @@ export type TaskType = "ORDER" | "REPAIR" | "MERGE" | "PREPARE" | "INSTALL" | "V
 
 export type TaskStatus = "PENDING" | "IN_PROGRESS" | "DONE" | "OVERDUE";
 
+export interface TaskComment {
+  id: string;
+  taskId: string;
+  author: string;
+  authorRole: AuthorRole;
+  content: string;
+  createdAt: string;
+  attachments?: TaskAttachment[];
+}
+
+export interface TaskAttachment {
+  id: string;
+  name: string;
+  type: "PDF" | "IMG" | "EXCEL" | "OTHER";
+  size: string;
+  uploadedAt: string;
+  uploadedBy: string;
+}
+
+export interface TaskApproval {
+  id: string;
+  taskId: string;
+  approver: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  required: boolean;
+  requestedAt: string;
+  respondedAt?: string;
+  comment?: string;
+}
+
 export interface TaskStep {
   id: string;
   partId: string;
@@ -25,6 +55,10 @@ export interface TaskStep {
   status: TaskStatus;
   completedAt?: string;
   order: number;
+  comments?: TaskComment[];
+  attachments?: TaskAttachment[];
+  approval?: TaskApproval;
+  requiresApproval?: boolean;
 }
 
 export interface ScheduleConflict {
@@ -39,6 +73,13 @@ export interface ScheduleConflict {
   keyBase?: string;
   keyAircraft?: string;
   keyBay?: string;
+  suggestions?: string[];
+  capacityInfo?: {
+    baseCapacityTotal?: number;
+    baseCapacityUsed?: number;
+    bayCapacityTotal?: number;
+    bayCapacityUsed?: number;
+  };
 }
 
 export interface LifePart {
@@ -181,3 +222,9 @@ export const CONFLICT_TYPE_LABEL: Record<ScheduleConflict["type"], string> = {
 
 export const BASE_OPTIONS: string[] = ["PEK-MRO(北京基地)", "SHA-BASE(上海基地)", "CAN-TECH(广州技术)", "XIAMEN-MRO(厦门)", "CHENGDU-SVC(成都)"];
 export const BAY_PREFIXES: string[] = ["A", "B", "C", "D"];
+
+export const APPROVAL_STATUS_LABEL: Record<TaskApproval["status"], string> = {
+  PENDING: "待主管确认",
+  APPROVED: "已闭环",
+  REJECTED: "退回修改",
+};

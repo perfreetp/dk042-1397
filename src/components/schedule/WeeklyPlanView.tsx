@@ -4,7 +4,7 @@ import { computeScheduledParts } from "@/store/selectors";
 import type { LifePart, ScheduleStatus } from "@/types";
 import { RISK_LABEL, SCHEDULE_LABEL } from "@/types";
 import { riskBarClass } from "@/utils/riskUtils";
-import { detectConflicts, getConflictsForPart, getConflictsOnDate, getMaxSeverity } from "@/utils/conflictUtils";
+import { detectConflicts, getConflictsForPart, getConflictsOnDate, getMaxSeverity, getBaseDailyCapacity } from "@/utils/conflictUtils";
 import type { ScheduleConflict } from "@/types";
 import {
   ChevronLeft,
@@ -20,6 +20,61 @@ import {
 } from "lucide-react";
 
 const WEEK_DAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+
+function highlightKeywords(text: string): React.ReactNode {
+  const keywords = ["换机位", "改期", "分流"];
+  const parts: React.ReactNode[] = [];
+  let remaining = text;
+  let keyIdx = 0;
+  while (remaining.length > 0) {
+    let earliestIdx = -1;
+    let earliestKw = "";
+    for (const kw of keywords) {
+      const idx = remaining.indexOf(kw);
+      if (idx !== -1 && (earliestIdx === -1 || idx < earliestIdx)) {
+        earliestIdx = idx;
+        earliestKw = kw;
+      }
+    }
+    if (earliestIdx === -1) {
+      parts.push(<span key={keyIdx++}>{remaining}</span>);
+      break;
+    }
+    if (earliestIdx > 0) {
+      parts.push(<span key={keyIdx++}>{remaining.slice(0, earliestIdx)}</span>);
+    }
+    parts.push(
+      <b key={keyIdx++} className="font-semibold text-gray-900">
+        {earliestKw}
+      </b>
+    );
+    remaining = remaining.slice(earliestIdx + earliestKw.length);
+  }
+  return <>{parts}</>;
+}
+
+function getCapacityColorClasses(used: number, total: number): { bar: string; bg: string; badge: string } {
+  const ratio = used / total;
+  if (ratio <= 0.8) {
+    return {
+      bar: "bg-gradient-to-r from-emerald-400 to-emerald-500",
+      bg: "bg-emerald-50 border-emerald-200 text-emerald-700",
+      badge: "",
+    };
+  } else if (ratio <= 1) {
+    return {
+      bar: "bg-gradient-to-r from-amber-400 to-amber-500",
+      bg: "bg-amber-50 border-amber-200 text-amber-700",
+      badge: "",
+    };
+  } else {
+    return {
+      bar: "bg-gradient-to-r from-red-400 to-red-500",
+      bg: "bg-red-50 border-red-200 text-red-700",
+      badge: "text-red-600",
+    };
+  }
+}
 
 function formatDate(d: Date): string {
   const y = d.getFullYear();
@@ -137,18 +192,31 @@ function PartRow({ part, onClick, conflicts }: PartRowProps) {
           )}
         </div>
         {hasConflicts && (
-          <div className="mt-2 space-y-1">
+          <div className="mt-2 space-y-1.5">
             {partConflicts.map((c) => (
-              <div
-                key={c.id}
-                className={[
-                  "text-[10px] px-2 py-1 rounded border leading-snug",
-                  c.severity === "CRITICAL"
-                    ? "bg-alert-critical/10 border-alert-critical/30 text-alert-critical"
-                    : "bg-alert-warning/10 border-alert-warning/30 text-alert-warning",
-                ].join(" ")}
-              >
-                ⚠️ {c.description}
+              <div key={c.id}>
+                <div
+                  className={[
+                    "text-[10px] px-2 py-1 rounded border leading-snug",
+                    c.severity === "CRITICAL"
+                      ? "bg-alert-critical/10 border-alert-critical/30 text-alert-critical"
+                      : "bg-alert-warning/10 border-alert-warning/30 text-alert-warning",
+                  ].join(" ")}
+                >
+                  {c.severity === "CRITICAL" ? "🔴" : "🟠"} {c.description}
+                </div>
+                {c.suggestions && c.suggestions.length > 0 && (
+                  <div className="mt-1 pl-3 space-y-0.5 border-l-2 border-gray-200 ml-2">
+                    {c.suggestions.slice(0, 3).map((sug, idx) => (
+                      <div
+                        key={idx}
+                        className="text-[10px] text-gray-500 italic leading-snug py-0.5"
+                      >
+                        💡 → {highlightKeywords(sug)}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -353,6 +421,13 @@ export default function WeeklyPlanView() {
           const dayConflicts = getConflictsOnDate(conflicts, dateKey);
           const dayHasCritical = dayConflicts.some((c) => c.severity === "CRITICAL");
 
+          const baseCapacities = byBase
+            ? Array.from(byBase.keys()).map((baseName) => {
+                const cap = getBaseDailyCapacity(scheduledParts, baseName, dateKey);
+                return { baseName, ...cap };
+              })
+            : [];
+
           return (
             <div key={dateKey} className="rounded-xl border border-gray-200 overflow-hidden">
               {/* Date separator */}
@@ -371,7 +446,7 @@ export default function WeeklyPlanView() {
                       ].join(" ")}
                     >
                       <AlertTriangle className="w-2.5 h-2.5" />
-                      {dayConflicts.length}个冲突
+                      ⚠️ {dayConflicts.length}个冲突
                     </span>
                   )}
                 </div>
@@ -383,6 +458,38 @@ export default function WeeklyPlanView() {
                 </div>
               </div>
 
+              {/* Daily base capacity summary */}
+              {baseCapacities.length > 0 && (
+                <div className="px-4 py-2 bg-gradient-to-r from-gray-50 via-white to-gray-50 border-b border-gray-100">
+                  <div className="flex flex-wrap gap-2">
+                    {baseCapacities.map(({ baseName, total, used }) => {
+                      const colors = getCapacityColorClasses(used, total);
+                      const isOverload = used > total;
+                      return (
+                        <div
+                          key={baseName}
+                          title={`点击查看 ${baseName} 换机位建议`}
+                          className={`group flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[11px] cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5 ${colors.bg}`}
+                        >
+                          <span>🏭</span>
+                          <span className="font-semibold">{baseName}</span>
+                          <span className={`font-mono-tabular font-bold ${isOverload ? "text-red-600" : ""}`}>
+                            {used}/{total}
+                          </span>
+                          {isOverload ? (
+                            <span className="text-red-600 font-bold">⚠️超载</span>
+                          ) : used / total > 0.8 ? (
+                            <span className="text-amber-600">⚡高负荷</span>
+                          ) : (
+                            <span className="text-emerald-600">✅正常</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Day content */}
               <div className="p-3 space-y-3">
                 {dayCount === 0 ? (
@@ -391,16 +498,43 @@ export default function WeeklyPlanView() {
                   byBase &&
                   Array.from(byBase.entries()).map(([baseName, byAc]) => {
                     const baseCount = Array.from(byAc.values()).reduce((s, l) => s + l.length, 0);
+                    const capacity = getBaseDailyCapacity(scheduledParts, baseName, dateKey);
+                    const { used, total } = capacity;
+                    const colors = getCapacityColorClasses(used, total);
+                    const isOverload = used > total;
+                    const barPct = Math.min(100, (used / total) * 100);
+
                     return (
                       <div key={baseName} className="space-y-2">
-                        {/* Base header */}
-                        <div className="flex items-center gap-2 px-1">
+                        {/* Base header with capacity bar */}
+                        <div className="flex items-center gap-2 px-1 flex-wrap">
                           <span className="text-sm">🏭</span>
                           <span className="text-sm font-semibold text-indigo-700">{baseName}</span>
                           <span className="h-4 w-px bg-indigo-200" />
                           <span className="text-xs text-gray-500">
-                            <b className="font-mono-tabular text-indigo-600">{baseCount}</b> 件
+                            ▎<b className="font-mono-tabular text-indigo-600">{baseCount}</b> 件
                           </span>
+                          {/* Capacity progress bar */}
+                          <div className="flex items-center gap-2 ml-1">
+                            <div className="relative w-[120px] h-3 bg-gray-200 rounded-full overflow-hidden shadow-inner">
+                              <div
+                                className={`absolute top-0 left-0 h-full rounded-full transition-all duration-500 ${colors.bar}`}
+                                style={{ width: `${barPct}%` }}
+                              />
+                            </div>
+                            <span
+                              className={`text-[11px] font-mono-tabular font-semibold ${
+                                isOverload ? "text-red-600" : used / total > 0.8 ? "text-amber-600" : "text-gray-600"
+                              }`}
+                            >
+                              {used}/{total}
+                            </span>
+                            {isOverload && (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-200">
+                                ⚠️ 超载
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         {/* Aircraft cards */}

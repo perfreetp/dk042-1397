@@ -48,6 +48,7 @@ const PLANNING_HEADERS = [
   "处理进度",
   "排程冲突",
   "交接未确认",
+  "📋 改期/换机位建议",
 ];
 
 function escapeCSVField(value: string): string {
@@ -129,13 +130,33 @@ export default function PartsExportButton({ parts }: PartsExportButtonProps) {
 
   const riskSummary = useMemo(() => {
     const conflictPartIds = new Set<string>();
-    for (const c of partConflictsMap.values()) {
-      for (const conf of c) {
+    const suggestPartIds = new Set<string>();
+    const bayChangePartIds = new Set<string>();
+    const divertPartIds = new Set<string>();
+    const reschedulePartIds = new Set<string>();
+
+    for (const [partId, confs] of partConflictsMap.entries()) {
+      let hasBay = false;
+      let hasDivert = false;
+      let hasReschedule = false;
+      for (const conf of confs) {
         for (const pid of conf.relatedPartIds) {
           conflictPartIds.add(pid);
         }
+        if (conf.suggestions && conf.suggestions.length > 0) {
+          suggestPartIds.add(partId);
+          for (const s of conf.suggestions) {
+            if (s.includes("换机位")) hasBay = true;
+            if (s.includes("分流")) hasDivert = true;
+            if (s.includes("改期")) hasReschedule = true;
+          }
+        }
       }
+      if (hasBay) bayChangePartIds.add(partId);
+      if (hasDivert) divertPartIds.add(partId);
+      if (hasReschedule) reschedulePartIds.add(partId);
     }
+
     let totalUnconfirmed = 0;
     for (const n of handoverNotes) {
       if (n.status !== "CONFIRMED") totalUnconfirmed++;
@@ -148,6 +169,10 @@ export default function PartsExportButton({ parts }: PartsExportButtonProps) {
       conflictCount: conflictPartIds.size,
       unconfirmedCount: totalUnconfirmed,
       overdueCount: totalOverdue,
+      suggestCount: suggestPartIds.size,
+      bayChangeCount: bayChangePartIds.size,
+      divertCount: divertPartIds.size,
+      rescheduleCount: reschedulePartIds.size,
     };
   }, [partConflictsMap, handoverNotes, partTaskSummary]);
 
@@ -220,6 +245,18 @@ export default function PartsExportButton({ parts }: PartsExportButtonProps) {
       const conflictText = conflicts.length > 0 ? `${conflicts.length}个冲突` : "-";
       const unconfirmedText = unconfirmed > 0 ? `${unconfirmed}条未确认` : "-";
 
+      const allSuggestions: string[] = [];
+      for (const c of conflicts) {
+        if (c.suggestions) {
+          for (const s of c.suggestions) {
+            allSuggestions.push(s);
+          }
+        }
+      }
+      const suggestionText = allSuggestions.length > 0
+        ? allSuggestions.slice(0, 3).map((s) => `💡${s}`).join("; ")
+        : "-";
+
       const row = [
         RISK_LABEL[p.riskLevel],
         p.aircraftReg,
@@ -240,6 +277,7 @@ export default function PartsExportButton({ parts }: PartsExportButtonProps) {
         progressText,
         conflictText,
         unconfirmedText,
+        suggestionText,
       ];
       lines.push(row.join("\t"));
     }
@@ -267,6 +305,18 @@ export default function PartsExportButton({ parts }: PartsExportButtonProps) {
       const conflictText = conflicts.length > 0 ? `${conflicts.length}个冲突` : "-";
       const unconfirmedText = unconfirmed > 0 ? `${unconfirmed}条未确认` : "-";
 
+      const allSuggestions: string[] = [];
+      for (const c of conflicts) {
+        if (c.suggestions) {
+          for (const s of c.suggestions) {
+            allSuggestions.push(s);
+          }
+        }
+      }
+      const suggestionText = allSuggestions.length > 0
+        ? allSuggestions.slice(0, 3).map((s) => `💡${s}`).join("; ")
+        : "-";
+
       const row = [
         RISK_LABEL[p.riskLevel],
         p.aircraftReg,
@@ -287,6 +337,7 @@ export default function PartsExportButton({ parts }: PartsExportButtonProps) {
         progressText,
         conflictText,
         unconfirmedText,
+        suggestionText,
       ].map(escapeCSVField);
       lines.push(row.join(","));
     }
@@ -323,7 +374,7 @@ export default function PartsExportButton({ parts }: PartsExportButtonProps) {
 
   const copyBtnText = version === "BASIC" ? "复制台账到剪贴板" : "复制排程计划(维修用)";
   const downloadBtnText = version === "BASIC" ? "下载台账 CSV" : "下载排程计划CSV(库房用)";
-  const tableColSpan = version === "BASIC" ? 10 : 19;
+  const tableColSpan = version === "BASIC" ? 10 : 20;
 
   return (
     <>
@@ -431,6 +482,20 @@ export default function PartsExportButton({ parts }: PartsExportButtonProps) {
                       <span className="text-gray-500">0 项</span>
                     )}
                   </span>
+                  {riskSummary.suggestCount > 0 && (
+                    <>
+                      <span className="text-gray-300">|</span>
+                      <span className="inline-flex items-center gap-1.5">
+                        💡 建议可优化
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold text-white bg-[#2563eb]">
+                          {riskSummary.suggestCount} 件
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          （其中换机位 {riskSummary.bayChangeCount} 件 / 分流 {riskSummary.divertCount} 件 / 改期 {riskSummary.rescheduleCount} 件）
+                        </span>
+                      </span>
+                    </>
+                  )}
                 </div>
                 <p className="text-xs text-gray-400 mt-1.5">
                   以上项目建议在发送给维修控制/航材库房前逐一确认闭环
@@ -528,6 +593,7 @@ export default function PartsExportButton({ parts }: PartsExportButtonProps) {
                       <th className="text-left px-3 py-3 font-semibold whitespace-nowrap min-w-[110px]">📋 处理进度</th>
                       <th className="text-left px-3 py-3 font-semibold whitespace-nowrap min-w-[90px]">⚠️ 排程冲突</th>
                       <th className="text-left px-3 py-3 font-semibold whitespace-nowrap min-w-[110px]">🔔 交接未确认</th>
+                      <th className="text-left px-3 py-3 font-semibold whitespace-nowrap min-w-[220px]">📋 改期/换机位建议</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -647,6 +713,30 @@ export default function PartsExportButton({ parts }: PartsExportButtonProps) {
                             ) : (
                               <span className="text-gray-400 text-xs">-</span>
                             )}
+                          </td>
+                          <td className="px-3 py-3 text-xs text-gray-500 min-w-[220px] whitespace-pre-wrap">
+                            {(() => {
+                              const allSuggestions: string[] = [];
+                              for (const c of conflicts) {
+                                if (c.suggestions) {
+                                  for (const s of c.suggestions) {
+                                    allSuggestions.push(s);
+                                  }
+                                }
+                              }
+                              if (allSuggestions.length === 0) {
+                                return <span className="text-gray-400">—</span>;
+                              }
+                              return (
+                                <div className="space-y-0.5">
+                                  {allSuggestions.slice(0, 3).map((s, i) => (
+                                    <div key={i} className="text-gray-500">
+                                      💡 {s}
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
                           </td>
                         </tr>
                       );

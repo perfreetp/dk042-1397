@@ -6,7 +6,6 @@ import type {
   AirworthinessDoc,
   HandoverNote,
   TaskStep,
-  TaskStatus,
 } from "@/types";
 import { RISK_ORDER } from "@/utils/riskUtils";
 

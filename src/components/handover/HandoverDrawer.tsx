@@ -48,25 +48,36 @@ export default function HandoverDrawer() {
   }, [partsWithNotes, aircraftFilter]);
 
   useEffect(() => {
-    const filterChanged = prevAircraftFilterRef.current !== aircraftFilter;
+    const prevFilter = prevAircraftFilterRef.current;
+    const filterChanged = prevFilter !== aircraftFilter;
     prevAircraftFilterRef.current = aircraftFilter;
 
     if (filteredPartsWithNotes.length === 0) {
       setIsFilteredMatch(false);
       return;
     }
+
+    const filterTrimmed = aircraftFilter.trim();
     const currentIsInFiltered = filteredPartsWithNotes.some(p => p.id === activePartId);
-    if (!activePartId || !currentIsInFiltered) {
+
+    if (filterChanged && filterTrimmed) {
       openDrawerForPart(filteredPartsWithNotes[0].id);
-      if (aircraftFilter.trim()) {
+      setIsFilteredMatch(true);
+    } else if (filterChanged && !filterTrimmed) {
+      setIsFilteredMatch(false);
+      const currentIsInAll = partsWithNotes.some(p => p.id === activePartId);
+      if (!activePartId || !currentIsInAll) {
+        openDrawerForPart(partsWithNotes[0]?.id ?? filteredPartsWithNotes[0].id);
+      }
+    } else {
+      if (!activePartId || !currentIsInFiltered) {
+        openDrawerForPart(filteredPartsWithNotes[0].id);
+      }
+      if (filterTrimmed) {
         setIsFilteredMatch(true);
       }
-    } else if (filterChanged && aircraftFilter.trim()) {
-      setIsFilteredMatch(true);
-    } else if (!aircraftFilter.trim()) {
-      setIsFilteredMatch(false);
     }
-  }, [filteredPartsWithNotes, activePartId, openDrawerForPart, aircraftFilter]);
+  }, [filteredPartsWithNotes, activePartId, openDrawerForPart, aircraftFilter, partsWithNotes]);
 
   const currentPart: LifePart | undefined = useMemo(() => {
     if (activePartId) return parts.find(p => p.id === activePartId);
@@ -395,7 +406,13 @@ export default function HandoverDrawer() {
 
               {currentPart && (
                 <div className="p-4 border-t border-gray-100 bg-gray-50/60">
-                  <NoteForm partId={currentPart.id} partName={currentPart.name} aircraftReg={currentPart.aircraftReg} />
+                  <NoteForm
+                    partId={currentPart.id}
+                    partName={currentPart.name}
+                    aircraftReg={currentPart.aircraftReg}
+                    partNumber={currentPart.partNumber}
+                    isFilteredMatch={isFilteredMatch && !!aircraftFilter.trim()}
+                  />
                 </div>
               )}
             </div>

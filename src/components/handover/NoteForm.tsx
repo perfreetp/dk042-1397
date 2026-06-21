@@ -14,9 +14,11 @@ interface NoteFormProps {
   partId?: string;
   partName?: string;
   aircraftReg?: string;
+  partNumber?: string;
+  isFilteredMatch?: boolean;
 }
 
-export default function NoteForm({ partId, partName, aircraftReg }: NoteFormProps) {
+export default function NoteForm({ partId, partName, aircraftReg, partNumber, isFilteredMatch }: NoteFormProps) {
   const [content, setContent] = useState("");
   const [role, setRole] = useState<AuthorRole>(() => mockCurrentUser().role);
   const [sending, setSending] = useState(false);
@@ -55,9 +57,16 @@ export default function NoteForm({ partId, partName, aircraftReg }: NoteFormProp
       {hasPart ? (
         <div className="mb-3 px-3 py-2 rounded-lg border border-blue-200 bg-blue-50/70 flex items-center gap-2">
           <Lock className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-          <span className="text-[11px] text-blue-800 font-medium">
-            ✏️ 新增备注将写入 <b>{partName}</b> (<span className="font-mono-tabular">{aircraftReg}</span>)
+          <span className="text-[11px] text-blue-800 font-medium flex-1 min-w-0">
+            ✏️ 新增备注将写入：<b>{partName}</b>
+            {partNumber && <span className="font-mono-tabular"> PN-{partNumber}</span>}
+            (<span className="font-mono-tabular">{aircraftReg}</span>)
           </span>
+          {isFilteredMatch && (
+            <span className="inline-flex items-center shrink-0 rounded-full bg-blue-600 text-white px-2 py-0.5 text-[10px] font-semibold">
+              🔍 筛选锁定
+            </span>
+          )}
         </div>
       ) : (
         <div className="mb-3 px-3 py-2 rounded-lg border border-amber-200 bg-amber-50/70 flex items-center gap-2">

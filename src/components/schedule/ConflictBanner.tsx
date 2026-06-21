@@ -3,6 +3,38 @@ import type { ScheduleConflict } from "@/types";
 import { getMaxSeverity } from "@/utils/conflictUtils";
 import { AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
 
+function highlightKeywords(text: string): React.ReactNode {
+  const keywords = ["换机位", "改期", "分流"];
+  const parts: React.ReactNode[] = [];
+  let remaining = text;
+  let keyIdx = 0;
+  while (remaining.length > 0) {
+    let earliestIdx = -1;
+    let earliestKw = "";
+    for (const kw of keywords) {
+      const idx = remaining.indexOf(kw);
+      if (idx !== -1 && (earliestIdx === -1 || idx < earliestIdx)) {
+        earliestIdx = idx;
+        earliestKw = kw;
+      }
+    }
+    if (earliestIdx === -1) {
+      parts.push(<span key={keyIdx++}>{remaining}</span>);
+      break;
+    }
+    if (earliestIdx > 0) {
+      parts.push(<span key={keyIdx++}>{remaining.slice(0, earliestIdx)}</span>);
+    }
+    parts.push(
+      <b key={keyIdx++} className="font-semibold text-gray-800">
+        {earliestKw}
+      </b>
+    );
+    remaining = remaining.slice(earliestIdx + earliestKw.length);
+  }
+  return <>{parts}</>;
+}
+
 interface ConflictBannerProps {
   conflicts: ScheduleConflict[];
   onJumpToPart?: (partId: string) => void;
@@ -71,6 +103,15 @@ export default function ConflictBanner({ conflicts, onJumpToPart }: ConflictBann
                   {conflict.severity === "CRITICAL" ? "🔴 " : "🟠 "}
                 </span>
                 <span className="text-gray-700">{conflict.description}</span>
+                {conflict.suggestions && conflict.suggestions.length > 0 && (
+                  <div className="mt-1.5 space-y-0.5 pl-3 border-l-2 border-gray-200 ml-1">
+                    {conflict.suggestions.slice(0, 3).map((sug, idx) => (
+                      <div key={idx} className="text-[10px] text-gray-500 leading-snug">
+                        💡 {highlightKeywords(sug)}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="mt-1 flex flex-wrap gap-1">
                   {conflict.partIds.map((partId, idx) => (
                     <button
