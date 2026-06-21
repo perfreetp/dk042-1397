@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import StatusMarker from "./StatusMarker";
+import SchedulePlanner from "./SchedulePlanner";
 
 export default function RiskCard({
   part,
@@ -173,6 +174,27 @@ export default function RiskCard({
           </div>
         </div>
 
+        {/* Schedule Summary (when scheduled) */}
+        {part.isScheduled && (
+          <div className="px-3.5 pb-3">
+            {part.plannedDate || part.plannedBay || part.plannedBase ? (
+              <div className="bg-aviation-700/5 text-aviation-700 text-[11px] px-2.5 py-1.5 rounded-md border border-aviation-100">
+              {[
+                part.plannedDate && `🗓️ ${part.plannedDate}`,
+                part.plannedBay && `机位 ${part.plannedBay}`,
+                part.plannedBase && `基地 ${part.plannedBase}`,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </div>
+            ) : (
+              <div className="text-[11px] text-gray-400 px-2.5 py-1.5 rounded-md bg-gray-50 border border-gray-100">
+                未设置停场计划
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Expanded section */}
         {expanded && (
           <div className="px-3.5 pb-4 pt-1 border-t border-gray-100 bg-gradient-to-b from-gray-50/50 to-white animate-fade-in">
@@ -200,6 +222,7 @@ export default function RiskCard({
                 </div>
               )}
               <StatusMarker partId={part.id} />
+              {part.isScheduled && <SchedulePlanner partId={part.id} />}
             </div>
           </div>
         )}

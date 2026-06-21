@@ -29,6 +29,9 @@ export interface LifePart {
   scheduleStatus: ScheduleStatus;
   isScheduled: boolean;
   scheduledDate?: string;
+  plannedDate?: string;
+  plannedBay?: string;
+  plannedBase?: string;
   lastRemovalId?: string;
   airworthinessRefs: string[];
 }
@@ -113,3 +116,6 @@ export const WINDOW_LABEL: Record<WarningWindow, string> = {
   "90D": "未来90天",
   CUSTOM: "自定义循环",
 };
+
+export const BASE_OPTIONS: string[] = ["PEK-MRO(北京基地)", "SHA-BASE(上海基地)", "CAN-TECH(广州技术)", "XIAMEN-MRO(厦门)", "CHENGDU-SVC(成都)"];
+export const BAY_PREFIXES: string[] = ["A", "B", "C", "D"];

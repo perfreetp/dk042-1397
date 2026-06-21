@@ -1,7 +1,7 @@
 import { useMemo } from "react";
-import { X, MapPin, Calendar, FileText, Wrench, User, AlertTriangle, MessageSquare, Plane, Clock } from "lucide-react";
+import { X, MapPin, Calendar, FileText, Wrench, User, AlertTriangle, MessageSquare, Plane, Clock, CheckCircle2 } from "lucide-react";
 import type { LifePart } from "@/types";
-import { CATEGORY_LABEL, RISK_LABEL, SCHEDULE_LABEL } from "@/types";
+import { CATEGORY_LABEL, RISK_LABEL, SCHEDULE_LABEL, HANDOVER_LABEL, ROLE_LABEL } from "@/types";
 import { useAppStore } from "@/store/useAppStore";
 import { findRemovalById, findDocsByNumbers, findNotesByPartId } from "@/store/selectors";
 import { riskBgClass, riskColor } from "@/utils/riskUtils";
@@ -272,17 +272,28 @@ export default function PartDetailModal({ part, onClose }: { part: LifePart; onC
                     打开面板
                   </button>
                 </div>
+                {notes.some((n) => n.status !== "CONFIRMED") && (
+                  <div className="mb-4 flex items-start gap-2 p-3 rounded-lg bg-alert-warning/15 border border-alert-warning/30">
+                    <AlertTriangle className="w-4 h-4 text-alert-warning shrink-0 mt-0.5" />
+                    <div className="text-[11px] font-semibold text-alert-warning leading-relaxed">
+                      ⚠️ 存在待处理交接，请及时确认
+                    </div>
+                  </div>
+                )}
                 {notes.length === 0 ? (
                   <div className="text-center text-xs text-gray-400 py-6">
                     <MessageSquare className="w-8 h-8 mx-auto mb-2 text-gray-200" />
                     暂无交接班备注
                   </div>
                 ) : (
-                  <div className="space-y-3 max-h-[380px] overflow-y-auto scrollbar-thin pr-1">
-                    {notes.slice(-5).map((n) => (
+                  <div className="space-y-3">
+                    {notes.slice(-3).map((n) => (
                       <div key={n.id} className="bg-white rounded-lg p-3 border border-gray-100 shadow-sm">
                         <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
-                          <span className="text-xs font-semibold text-aviation-700">{n.author}</span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs font-semibold text-aviation-700">{n.author}</span>
+                            <span className="text-[10px] text-gray-400">({ROLE_LABEL[n.authorRole]})</span>
+                          </div>
                           <div className="flex items-center gap-1.5">
                             <span
                               className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
@@ -293,29 +304,22 @@ export default function PartDetailModal({ part, onClose }: { part: LifePart; onC
                                     : "bg-alert-warning/10 text-alert-warning"
                               }`}
                             >
-                              {n.status === "CONFIRMED" ? "已确认" : n.status === "IN_PROGRESS" ? "处理中" : "待处理"}
+                              {HANDOVER_LABEL[n.status]}
                             </span>
-                            {n.authorRole === "NIGHT_SHIFT" && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-alert-warning/10 text-alert-warning">
-                                夜班
-                              </span>
-                            )}
                           </div>
                         </div>
-                        <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">{n.content}</p>
-                        <div className="mt-2 text-[10px] text-gray-400 font-mono-tabular">
-                          {formatDateTime(n.createdAt)}
+                        <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap line-clamp-3">{n.content}</p>
+                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-gray-400 font-mono-tabular">
+                          <span>创建：{formatDateTime(n.createdAt)}</span>
+                          {n.confirmedBy && (
+                            <span className="inline-flex items-center gap-1 text-alert-safe">
+                              <CheckCircle2 className="w-3 h-3" />
+                              {n.confirmedBy}{n.confirmedAt ? ` · ${formatDateTime(n.confirmedAt)}` : ""}
+                            </span>
+                          )}
                         </div>
                       </div>
                     ))}
-                  </div>
-                )}
-                {notes.some((n) => n.status !== "CONFIRMED") && (
-                  <div className="mt-4 flex items-start gap-2 p-3 rounded-lg bg-alert-warning/10 border border-alert-warning/20">
-                    <AlertTriangle className="w-4 h-4 text-alert-warning shrink-0 mt-0.5" />
-                    <div className="text-[11px] text-alert-warning leading-relaxed">
-                      存在待确认事项，请尽快进入交接备注面板处理，避免遗漏夜班交班信息
-                    </div>
                   </div>
                 )}
               </div>

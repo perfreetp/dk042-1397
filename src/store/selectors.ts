@@ -31,17 +31,17 @@ export function computeWarningParts(
   warningWindow: WarningWindow,
   customCycles: number
 ): LifePart[] {
-  let maxDays = 30;
-  let maxCycles = Infinity;
-  if (warningWindow === "30D") maxDays = 30;
-  else if (warningWindow === "60D") maxDays = 60;
-  else if (warningWindow === "90D") maxDays = 90;
-  else {
-    maxDays = 365;
-    maxCycles = customCycles;
+  let filtered: LifePart[];
+  if (warningWindow === "CUSTOM") {
+    filtered = parts.filter((p) => p.remainingCycles <= customCycles);
+  } else {
+    let maxDays = 30;
+    if (warningWindow === "30D") maxDays = 30;
+    else if (warningWindow === "60D") maxDays = 60;
+    else if (warningWindow === "90D") maxDays = 90;
+    filtered = parts.filter((p) => p.remainingDays <= maxDays);
   }
-  return parts
-    .filter((p) => p.remainingDays <= maxDays || p.remainingCycles <= maxCycles)
+  return filtered
     .filter((p) => p.riskLevel !== "NORMAL")
     .sort((a, b) => RISK_ORDER[a.riskLevel] - RISK_ORDER[b.riskLevel] || a.remainingDays - b.remainingDays);
 }

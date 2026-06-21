@@ -11,6 +11,44 @@ import type {
 import { mockParts, mockRemovals, mockDocs, mockNotes } from "@/data/mockData";
 import type { RemovalRecord, AirworthinessDoc } from "@/types";
 
+const STORAGE_KEY = "life-part-tracker:v1";
+
+interface PersistedState {
+  handoverNotes: HandoverNote[];
+  parts: LifePart[];
+  scheduledPartIds: string[];
+  filters: Filters;
+  warningWindow: WarningWindow;
+  customCycles: number;
+}
+
+function loadPersisted(): Partial<PersistedState> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as Partial<PersistedState>;
+  } catch {
+    return {};
+  }
+}
+
+function persistState(s: AppState) {
+  if (typeof window === "undefined") return;
+  try {
+    const toSave: PersistedState = {
+      handoverNotes: s.handoverNotes,
+      parts: s.parts,
+      scheduledPartIds: s.scheduledPartIds,
+      filters: s.filters,
+      warningWindow: s.warningWindow,
+      customCycles: s.customCycles,
+    };
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+  } catch {
+  }
+}
+
 interface AppState {
   filters: Filters;
   warningWindow: WarningWindow;
@@ -34,6 +72,7 @@ interface AppState {
   schedulePart: (partId: string) => void;
   unschedulePart: (partId: string) => void;
   setScheduleStatus: (partId: string, status: ScheduleStatus) => void;
+  updateScheduleDetails: (partId: string, details: Partial<Pick<LifePart, "plannedDate" | "plannedBay" | "plannedBase">>) => void;
 
   openDrawerForPart: (partId: string) => void;
   closeDrawer: () => void;
@@ -54,73 +93,84 @@ function nowISO(): string {
   return new Date().toISOString();
 }
 
-export const useAppStore = create<AppState>((set) => ({
-  filters: { ...DEFAULT_FILTERS },
-  warningWindow: "30D",
-  customCycles: 500,
-  parts: [...mockParts],
-  removalRecords: [...mockRemovals],
-  airworthinessDocs: [...mockDocs],
-  handoverNotes: [...mockNotes],
-  scheduledPartIds: mockParts.filter((p) => p.isScheduled).map((p) => p.id),
-  drawerOpen: false,
-  activePartId: null,
+export const useAppStore = create<AppState>((set) => {
+  const persisted = loadPersisted();
 
-  setFilters: (f) => set((s) => ({ filters: { ...s.filters, ...f } })),
-  resetFilters: () => set({ filters: { ...DEFAULT_FILTERS } }),
-  setWarningWindow: (w) => set({ warningWindow: w }),
-  setCustomCycles: (n) => set({ customCycles: n }),
+  return {
+    filters: { ...DEFAULT_FILTERS, ...persisted.filters },
+    warningWindow: persisted.warningWindow ?? "30D",
+    customCycles: persisted.customCycles ?? 500,
+    parts: persisted.parts ?? [...mockParts],
+    removalRecords: [...mockRemovals],
+    airworthinessDocs: [...mockDocs],
+    handoverNotes: persisted.handoverNotes ?? [...mockNotes],
+    scheduledPartIds: persisted.scheduledPartIds ?? mockParts.filter((p) => p.isScheduled).map((p) => p.id),
+    drawerOpen: false,
+    activePartId: null,
 
-  addHandoverNote: (note) =>
-    set((s) => ({
-      handoverNotes: [
-        ...s.handoverNotes,
-        {
-          ...note,
-          id: `N${Date.now()}`,
-          createdAt: nowISO(),
-        },
-      ],
-    })),
+    setFilters: (f) => set((s) => ({ filters: { ...s.filters, ...f } })),
+    resetFilters: () => set({ filters: { ...DEFAULT_FILTERS } }),
+    setWarningWindow: (w) => set({ warningWindow: w }),
+    setCustomCycles: (n) => set({ customCycles: n }),
 
-  updateNoteStatus: (id, status, confirmedBy) =>
-    set((s) => ({
-      handoverNotes: s.handoverNotes.map((n) =>
-        n.id === id
-          ? {
-              ...n,
-              status,
-              confirmedBy: status === "CONFIRMED" || status === "IN_PROGRESS" ? confirmedBy : n.confirmedBy,
-              confirmedAt: status === "CONFIRMED" ? nowISO() : n.confirmedAt,
-            }
-          : n
-      ),
-    })),
+    addHandoverNote: (note) =>
+      set((s) => ({
+        handoverNotes: [
+          ...s.handoverNotes,
+          {
+            ...note,
+            id: `N${Date.now()}`,
+            createdAt: nowISO(),
+          },
+        ],
+      })),
 
-  schedulePart: (partId) =>
-    set((s) => {
-      if (s.scheduledPartIds.includes(partId)) return {};
-      return {
-        scheduledPartIds: [...s.scheduledPartIds, partId],
-        parts: s.parts.map((p) => (p.id === partId ? { ...p, isScheduled: true } : p)),
-      };
-    }),
+    updateNoteStatus: (id, status, confirmedBy) =>
+      set((s) => ({
+        handoverNotes: s.handoverNotes.map((n) =>
+          n.id === id
+            ? {
+                ...n,
+                status,
+                confirmedBy: status === "CONFIRMED" || status === "IN_PROGRESS" ? confirmedBy : n.confirmedBy,
+                confirmedAt: status === "CONFIRMED" ? nowISO() : n.confirmedAt,
+              }
+            : n
+        ),
+      })),
 
-  unschedulePart: (partId) =>
-    set((s) => ({
-      scheduledPartIds: s.scheduledPartIds.filter((x) => x !== partId),
-      parts: s.parts.map((p) => (p.id === partId ? { ...p, isScheduled: false } : p)),
-    })),
+    schedulePart: (partId) =>
+      set((s) => {
+        if (s.scheduledPartIds.includes(partId)) return {};
+        return {
+          scheduledPartIds: [...s.scheduledPartIds, partId],
+          parts: s.parts.map((p) => (p.id === partId ? { ...p, isScheduled: true } : p)),
+        };
+      }),
 
-  setScheduleStatus: (partId, status) =>
-    set((s) => ({
-      parts: s.parts.map((p) => (p.id === partId ? { ...p, scheduleStatus: status } : p)),
-    })),
+    unschedulePart: (partId) =>
+      set((s) => ({
+        scheduledPartIds: s.scheduledPartIds.filter((x) => x !== partId),
+        parts: s.parts.map((p) => (p.id === partId ? { ...p, isScheduled: false } : p)),
+      })),
 
-  openDrawerForPart: (partId) => set({ activePartId: partId, drawerOpen: true }),
-  closeDrawer: () => set({ drawerOpen: false }),
-  setDrawerOpen: (open) => set({ drawerOpen: open }),
-}));
+    setScheduleStatus: (partId, status) =>
+      set((s) => ({
+        parts: s.parts.map((p) => (p.id === partId ? { ...p, scheduleStatus: status } : p)),
+      })),
+
+    updateScheduleDetails: (partId, details) =>
+      set((s) => ({
+        parts: s.parts.map((p) => (p.id === partId ? { ...p, ...details } : p)),
+      })),
+
+    openDrawerForPart: (partId) => set({ activePartId: partId, drawerOpen: true }),
+    closeDrawer: () => set({ drawerOpen: false }),
+    setDrawerOpen: (open) => set({ drawerOpen: open }),
+  };
+});
+
+useAppStore.subscribe((state) => persistState(state));
 
 export function mockCurrentUser(): { name: string; role: AuthorRole } {
   const hour = new Date().getHours();

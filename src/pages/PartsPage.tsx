@@ -1,8 +1,18 @@
+import { useMemo } from "react";
 import PartsFilterBar from "@/components/parts/PartsFilterBar";
 import PartsTable from "@/components/parts/PartsTable";
+import PartsExportButton from "@/components/parts/PartsExportButton";
 import { ListChecks } from "lucide-react";
+import { useAppStore } from "@/store/useAppStore";
+import { computeFilteredParts } from "@/store/selectors";
 
 export default function PartsPage() {
+  const allParts = useAppStore((s) => s.parts);
+  const filters = useAppStore((s) => s.filters);
+  const filteredParts = useMemo(
+    () => computeFilteredParts(allParts, filters),
+    [allParts, filters]
+  );
   return (
     <div className="flex-1 overflow-y-auto scrollbar-thin p-6 bg-gradient-to-b from-aviation-50/30 to-white">
       <div className="max-w-[1600px] mx-auto space-y-5 stagger">
@@ -16,19 +26,22 @@ export default function PartsPage() {
               <p className="text-sm text-gray-500 mt-0.5">按多维度条件筛选在册寿命件，查看单件详细信息与适航依据</p>
             </div>
           </div>
-          <div className="hidden md:flex items-center gap-2 text-xs text-gray-500 bg-white px-4 py-2 rounded-lg border border-aviation-100 shadow-card">
-            <span className="inline-flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-alert-critical animate-pulse-fast" /> 紧急
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-alert-warning animate-pulse-slow" /> 预警
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-alert-caution" /> 关注
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-alert-safe" /> 正常
-            </span>
+          <div className="flex items-center gap-2">
+            <PartsExportButton parts={filteredParts} />
+            <div className="hidden md:flex items-center gap-2 text-xs text-gray-500 bg-white px-4 py-2 rounded-lg border border-aviation-100 shadow-card">
+              <span className="inline-flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-alert-critical animate-pulse-fast" /> 紧急
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-alert-warning animate-pulse-slow" /> 预警
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-alert-caution" /> 关注
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-alert-safe" /> 正常
+              </span>
+            </div>
           </div>
         </div>
 
